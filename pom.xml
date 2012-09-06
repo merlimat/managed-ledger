@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<parent>
-		<groupId>com.yahoo.messaging</groupId>
+		<groupId>com.yahoo.cloud.messaging</groupId>
 		<artifactId>cloud-messaging-parent</artifactId>
 		<version>0.1</version>
 		<relativePath>..</relativePath>
