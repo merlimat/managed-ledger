@@ -329,6 +329,14 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         } catch (IllegalArgumentException e) {
             // Ok
         }
+
+        cursor.markDelete(new PositionImpl(lastPosition.getLedgerId(), lastPosition.getEntryId() - 1));
+        try {
+            cursor.seek(new PositionImpl(lastPosition.getLedgerId(), lastPosition.getEntryId() - 1));
+            fail("Should have failed");
+        } catch (IllegalArgumentException e) {
+            // Ok
+        }
     }
 
     @Test(timeOut = 20000)
@@ -441,7 +449,7 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         c1.markDelete(p3);
         c1.markDelete(p4);
         c1.markDelete(p5);
-        
+
         c2.markDelete(p1);
 
         // Reopen

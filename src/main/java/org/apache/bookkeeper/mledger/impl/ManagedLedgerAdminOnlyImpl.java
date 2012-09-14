@@ -54,14 +54,4 @@ public class ManagedLedgerAdminOnlyImpl extends ManagedLedgerImpl {
         throw exception();
     }
 
-    @Override
-    synchronized void asyncReadEntries(OpReadEntry opReadEntry) {
-        opReadEntry.failed(exception());
-    }
-
-    @Override
-    void delete() throws InterruptedException, ManagedLedgerException {
-        throw exception();
-    }
-
 }

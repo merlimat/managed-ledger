@@ -24,9 +24,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.bookkeeper.mledger.AsyncCallbacks.AddEntryCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.CloseCallback;
+import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteCursorCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteLedgerCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.OpenCursorCallback;
@@ -50,6 +52,7 @@ import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.Sets;
 
 public class ManagedLedgerTest extends BookKeeperClusterTestCase {
 
@@ -1035,5 +1038,117 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
         counter.await();
         assertEquals(result.instance1, result.instance2);
         assertNotNull(result.instance1);
+    }
+
+    @Test
+    public void getCursors() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ManagedCursor c1 = ledger.openCursor("c1");
+        ManagedCursor c2 = ledger.openCursor("c2");
+
+        assertEquals(Sets.newHashSet(ledger.getCursors()), Sets.newHashSet(c1, c2));
+
+        c1.close();
+        ledger.deleteCursor("c1");
+        assertEquals(Sets.newHashSet(ledger.getCursors()), Sets.newHashSet(c2));
+
+        c2.close();
+        ledger.deleteCursor("c2");
+        assertEquals(Sets.newHashSet(ledger.getCursors()), Sets.newHashSet());
+    }
+
+    @Test
+    public void openReadOnly() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ledger.openCursor("c1");
+
+        ledger.addEntry("data".getBytes(Encoding));
+
+        ManagedLedger readOnlyLedger = factory.openReadOnly("my_test_ledger");
+        assertEquals(readOnlyLedger.getNumberOfEntries(), 1);
+
+        // Try to publish again to prove the previous handle is still valid
+        // ledger.addEntry("data".getBytes(Encoding));
+        // assertEquals(readOnlyLedger.getNumberOfEntries(), 2);
+
+        try {
+            readOnlyLedger.addEntry("data".getBytes(Encoding));
+            fail("should have failed");
+        } catch (ManagedLedgerException e) {
+            // Ok
+        }
+
+        final AtomicBoolean operationFailed = new AtomicBoolean(false);
+
+        readOnlyLedger.asyncAddEntry("data".getBytes(Encoding), new AddEntryCallback() {
+            public void addFailed(ManagedLedgerException exception, Object ctx) {
+                operationFailed.set(true);
+            }
+
+            public void addComplete(Position position, Object ctx) {
+                operationFailed.set(false);
+            }
+        }, null);
+
+        assertEquals(operationFailed.get(), true);
+
+        readOnlyLedger.asyncOpenCursor("c2", new OpenCursorCallback() {
+            public void openCursorFailed(ManagedLedgerException exception, Object ctx) {
+                operationFailed.set(true);
+            }
+
+            public void openCursorComplete(ManagedCursor cursor, Object ctx) {
+                operationFailed.set(false);
+            }
+        }, null);
+
+        assertEquals(operationFailed.get(), true);
+
+        readOnlyLedger.asyncDeleteCursor("c2", new DeleteCursorCallback() {
+            public void deleteCursorFailed(ManagedLedgerException exception, Object ctx) {
+                operationFailed.set(true);
+            }
+
+            public void deleteCursorComplete(Object ctx) {
+                operationFailed.set(false);
+            }
+        }, null);
+
+        assertEquals(operationFailed.get(), true);
+
+        try {
+            readOnlyLedger.openCursor("c2");
+            fail("should have failed");
+        } catch (ManagedLedgerException e) {
+            // Ok
+        }
+
+        try {
+            readOnlyLedger.deleteCursor("c2");
+            fail("should have failed");
+        } catch (ManagedLedgerException e) {
+            // Ok
+        }
+
+        readOnlyLedger.close();
+        ledger.close();
+    }
+
+    @Test
+    public void ledgersList() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        MetaStore store = factory.getMetaStore();
+
+        assertEquals(Sets.newHashSet(store.getManagedLedgers()), Sets.newHashSet());
+        factory.open("ledger1");
+        assertEquals(Sets.newHashSet(store.getManagedLedgers()), Sets.newHashSet("ledger1"));
+        factory.open("ledger2");
+        assertEquals(Sets.newHashSet(store.getManagedLedgers()), Sets.newHashSet("ledger1", "ledger2"));
+        factory.delete("ledger1");
+        assertEquals(Sets.newHashSet(store.getManagedLedgers()), Sets.newHashSet("ledger2"));
+        factory.delete("ledger2");
+        assertEquals(Sets.newHashSet(store.getManagedLedgers()), Sets.newHashSet());
     }
 }
