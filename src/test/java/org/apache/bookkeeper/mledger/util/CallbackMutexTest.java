@@ -29,7 +29,7 @@ public class CallbackMutexTest {
         }).start();
     }
 
-    @Test
+    @Test(enabled = false)
     public void unlock() {
         ProtectedCode pc = new ProtectedCode();
         // Spawn many threads and start them all, all executing the same protected code
