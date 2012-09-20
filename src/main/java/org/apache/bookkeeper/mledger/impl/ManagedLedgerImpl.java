@@ -565,8 +565,14 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             ManagedLedgerException status = new ManagedLedgerException(BKException.create(rc));
 
             // Empty the list of pending requests and make all of them fail
-            while (!pendingAddEntries.isEmpty()) {
-                pendingAddEntries.poll().failed(status);
+            while (true) {
+                OpAddEntry op = pendingAddEntries.poll();
+                if (op != null) {
+                    op.failed(status);
+                    continue;
+                } else {
+                    break;
+                }
             }
         } else {
             log.debug("[{}] Successfully created new ledger {}", name, lh.getId());
@@ -588,8 +594,14 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     ledgersListMutex.unlock();
 
                     synchronized (ManagedLedgerImpl.this) {
-                        while (!pendingAddEntries.isEmpty()) {
-                            pendingAddEntries.poll().failed(e);
+                        while (true) {
+                            OpAddEntry op = pendingAddEntries.poll();
+                            if (op != null) {
+                                op.failed(e);
+                                continue;
+                            } else {
+                                break;
+                            }
                         }
                     }
                 }
@@ -606,8 +618,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         state = State.LedgerOpened;
 
         // Process all the pending addEntry requests
-        while (!pendingAddEntries.isEmpty()) {
+        while (true) {
             OpAddEntry op = pendingAddEntries.poll();
+            if (op == null) {
+                break;
+            }
 
             op.setLedger(currentLedger);
             ++currentLedgerEntries;
