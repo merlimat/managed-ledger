@@ -41,6 +41,10 @@ public class MockZooKeeper extends ZooKeeper {
             InterruptedException {
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
+
+        if (tree.containsKey(path)) {
+            throw new KeeperException.NodeExistsException(path);
+        }
         tree.put(path, new String(data));
         return path;
     }
@@ -48,7 +52,9 @@ public class MockZooKeeper extends ZooKeeper {
     @Override
     public void create(String path, byte[] data, List<ACL> acl, CreateMode createMode, StringCallback cb, Object ctx) {
         if (stopped.get()) {
-            cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null);
+            cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx, null);
+        } else if (tree.containsKey(path)) {
+            cb.processResult(KeeperException.Code.NODEEXISTS.intValue(), path, ctx, null);
         } else {
             tree.put(path, new String(data));
             cb.processResult(0, path, ctx, null);
@@ -116,6 +122,7 @@ public class MockZooKeeper extends ZooKeeper {
                 continue;
             } else {
                 String child = item.substring(path.length() + 1);
+                log.debug("path: '{}' -- item: '{}' -- child: '{}'", new Object[] { path, item, child });
                 if (!child.contains("/")) {
                     children.add(child);
                 }
@@ -189,18 +196,21 @@ public class MockZooKeeper extends ZooKeeper {
     public void delete(String path, int version) throws InterruptedException, KeeperException {
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
+        if (!tree.containsKey(path))
+            throw new KeeperException.NoNodeException(path);
         tree.remove(path);
     }
 
     @Override
     public void delete(String path, int version, VoidCallback cb, Object ctx) {
         if (stopped.get()) {
-            cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx);
-            return;
+            cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx);
+        } else if (!tree.containsKey(path)) {
+            cb.processResult(KeeperException.Code.NONODE.intValue(), path, ctx);
+        } else {
+            tree.remove(path);
+            cb.processResult(0, path, ctx);
         }
-
-        tree.remove(path);
-        cb.processResult(0, path, ctx);
     }
 
     public void shutdown() {
