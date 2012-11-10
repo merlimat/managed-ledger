@@ -10,17 +10,22 @@ import org.apache.zookeeper.AsyncCallback.DataCallback;
 import org.apache.zookeeper.AsyncCallback.StatCallback;
 import org.apache.zookeeper.AsyncCallback.StringCallback;
 import org.apache.zookeeper.AsyncCallback.VoidCallback;
+import org.apache.zookeeper.Watcher.Event.EventType;
+import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.SetMultimap;
 import com.google.inject.internal.Maps;
 
 @SuppressWarnings("deprecation")
 public class MockZooKeeper extends ZooKeeper {
     TreeMap<String, String> tree = Maps.newTreeMap();
+    SetMultimap<String, Watcher> watchers = HashMultimap.create();
     AtomicBoolean stopped = new AtomicBoolean(false);
 
     public MockZooKeeper() throws Exception {
@@ -67,6 +72,8 @@ public class MockZooKeeper extends ZooKeeper {
         if (value == null) {
             throw new KeeperException.NoNodeException(path);
         } else {
+            if (watcher != null)
+                watchers.put(path, watcher);
             return value.getBytes();
         }
     }
@@ -106,6 +113,8 @@ public class MockZooKeeper extends ZooKeeper {
         }
 
         cb.processResult(0, path, ctx, children);
+        if (watcher != null)
+            watchers.put(path, watcher);
     }
 
     @Override
@@ -178,6 +187,11 @@ public class MockZooKeeper extends ZooKeeper {
             throw new KeeperException.ConnectionLossException();
 
         tree.put(path, new String(data));
+        for (Watcher watcher : watchers.get(path)) {
+            watcher.process(new WatchedEvent(EventType.NodeDataChanged, KeeperState.SyncConnected, path));
+        }
+
+        watchers.removeAll(path);
         return new Stat();
     }
 
@@ -190,6 +204,12 @@ public class MockZooKeeper extends ZooKeeper {
 
         tree.put(path, new String(data));
         cb.processResult(0, path, ctx, new Stat());
+
+        for (Watcher watcher : watchers.get(path)) {
+            watcher.process(new WatchedEvent(EventType.NodeDataChanged, KeeperState.SyncConnected, path));
+        }
+
+        watchers.removeAll(path);
     }
 
     @Override
@@ -199,6 +219,12 @@ public class MockZooKeeper extends ZooKeeper {
         if (!tree.containsKey(path))
             throw new KeeperException.NoNodeException(path);
         tree.remove(path);
+
+        for (Watcher watcher : watchers.get(path)) {
+            watcher.process(new WatchedEvent(EventType.NodeDeleted, KeeperState.SyncConnected, path));
+        }
+
+        watchers.removeAll(path);
     }
 
     @Override
@@ -210,6 +236,12 @@ public class MockZooKeeper extends ZooKeeper {
         } else {
             tree.remove(path);
             cb.processResult(0, path, ctx);
+
+            for (Watcher watcher : watchers.get(path)) {
+                watcher.process(new WatchedEvent(EventType.NodeDeleted, KeeperState.SyncConnected, path));
+            }
+
+            watchers.removeAll(path);
         }
     }
 
