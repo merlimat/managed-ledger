@@ -1,6 +1,7 @@
 package org.apache.zookeeper;
 
 import java.util.List;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -16,6 +17,7 @@ import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testng.internal.annotations.Sets;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
@@ -89,6 +91,24 @@ public class MockZooKeeper extends ZooKeeper {
         if (value == null) {
             cb.processResult(KeeperException.Code.NoNode, path, ctx, null, null);
         } else {
+            cb.processResult(0, path, ctx, value.getBytes(), new Stat());
+        }
+    }
+
+    @Override
+    public void getData(String path, Watcher watcher, DataCallback cb, Object ctx) {
+        if (stopped.get()) {
+            cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx, null, null);
+            return;
+        }
+
+        String value = tree.get(path);
+        if (value == null) {
+            cb.processResult(KeeperException.Code.NONODE.intValue(), path, ctx, null, null);
+        } else {
+            if (watcher != null)
+                watchers.put(path, watcher);
+
             cb.processResult(0, path, ctx, value.getBytes(), new Stat());
         }
     }
@@ -187,11 +207,14 @@ public class MockZooKeeper extends ZooKeeper {
             throw new KeeperException.ConnectionLossException();
 
         tree.put(path, new String(data));
-        for (Watcher watcher : watchers.get(path)) {
+        Set<Watcher> toNotify = Sets.newHashSet();
+        toNotify.addAll(watchers.get(path));
+        watchers.removeAll(path);
+
+        for (Watcher watcher : toNotify) {
             watcher.process(new WatchedEvent(EventType.NodeDataChanged, KeeperState.SyncConnected, path));
         }
 
-        watchers.removeAll(path);
         return new Stat();
     }
 
