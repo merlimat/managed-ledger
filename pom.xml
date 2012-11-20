@@ -15,7 +15,7 @@
 	</properties>
 
 	<artifactId>managed-ledger</artifactId>
-	<name>Managed Ledger</name>
+	<name>Managed Ledger JAR</name>
 
 	<dependencies>
 		<dependency>
