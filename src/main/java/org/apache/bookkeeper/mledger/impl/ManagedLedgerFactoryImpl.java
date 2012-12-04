@@ -50,14 +50,11 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
 
     private final ConcurrentMap<String, ManagedLedgerImpl> ledgers = Maps.newConcurrentMap();
 
-    public ManagedLedgerFactoryImpl(String zookeeperQuorum) throws Exception {
-        this(zookeeperQuorum, 5000);
-    }
-
-    public ManagedLedgerFactoryImpl(String zookeeperQuorum, int sessionTimeout) throws Exception {
+    public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration) throws Exception {
         final CountDownLatch counter = new CountDownLatch(1);
+        final String zookeeperQuorum = bkClientConfiguration.getZkServers();
 
-        zookeeper = new ZooKeeper(zookeeperQuorum, sessionTimeout, new Watcher() {
+        zookeeper = new ZooKeeper(zookeeperQuorum, bkClientConfiguration.getZkTimeout(), new Watcher() {
             @Override
             public void process(WatchedEvent event) {
                 if (event.getState().equals(Watcher.Event.KeeperState.SyncConnected)) {
@@ -69,15 +66,13 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
             }
         });
 
-        counter.await(sessionTimeout, TimeUnit.MILLISECONDS);
+        counter.await(bkClientConfiguration.getZkTimeout(), TimeUnit.MILLISECONDS);
 
         if (zookeeper.getState() != States.CONNECTED) {
             throw new ManagedLedgerException("Error connecting to ZooKeeper at '" + zookeeperQuorum + "'");
         }
 
-        ClientConfiguration conf = new ClientConfiguration();
-        conf.setThrottleValue(100000);
-        this.bookKeeper = new BookKeeper(conf, zookeeper);
+        this.bookKeeper = new BookKeeper(bkClientConfiguration, zookeeper);
         this.isBookkeeperManaged = true;
 
         this.store = new MetaStoreImplZookeeper(zookeeper);
