@@ -26,7 +26,7 @@ public class MockLedgerHandle extends LedgerHandle {
     boolean fenced = false;
 
     MockLedgerHandle(MockBookKeeper bk, long id) throws GeneralSecurityException {
-        super(bk, id, new LedgerMetadata(3, 2), DigestType.MAC, "".getBytes());
+        super(bk, id, new LedgerMetadata(3, 3, 2, DigestType.MAC, "".getBytes()), DigestType.MAC, "".getBytes());
         this.bk = bk;
         this.id = id;
     }
@@ -67,7 +67,7 @@ public class MockLedgerHandle extends LedgerHandle {
     }
 
     @Override
-    public void addEntry(byte[] data) throws InterruptedException, BKException {
+    public long addEntry(byte[] data) throws InterruptedException, BKException {
         if (fenced) {
             throw BKException.create(BKException.Code.LedgerFencedException);
         }
@@ -78,6 +78,7 @@ public class MockLedgerHandle extends LedgerHandle {
 
         lastEntry = entries.size();
         entries.add(new MockLedgerEntry(ledgerId, lastEntry, data));
+        return lastEntry;
     }
 
     @Override
