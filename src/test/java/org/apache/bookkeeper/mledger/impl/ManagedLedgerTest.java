@@ -315,7 +315,8 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
         ManagedLedgerConfig config = new ManagedLedgerConfig().setMaxEntriesPerLedger(1000000);
         config.setMaxSizePerLedgerMb(1);
         config.setEnsembleSize(1);
-        config.setQuorumSize(1);
+        config.setWriteQuorumSize(1).setAckQuorumSize(1);
+        config.setMetadataWriteQuorumSize(1).setMetadataAckQuorumSize(1);
         ManagedLedger ledger = factory.open("my_test_ledger", config);
 
         assertEquals(ledger.getNumberOfEntries(), 0);

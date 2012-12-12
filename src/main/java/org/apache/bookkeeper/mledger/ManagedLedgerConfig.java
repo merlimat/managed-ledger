@@ -32,9 +32,11 @@ public class ManagedLedgerConfig {
     private int maxEntriesPerLedger = 50000;
     private int maxSizePerLedgerMb = 100;
     private int ensembleSize = 3;
-    private int quorumSize = 2;
-    private int metadataEnsemblesize = 3;
-    private int metadataQuorumSize = 2;
+    private int writeQuorumSize = 2;
+    private int ackQuorumSize = 2;
+    private int metadataEnsembleSize = 3;
+    private int metadataWriteQuorumSize = 2;
+    private int metadataAckQuorumSize = 2;
     private int metadataMaxEntriesPerLedger = (int) 1e6;
     private DigestType digestType = DigestType.MAC;
     private byte[] password = "".getBytes(Charsets.UTF_8);
@@ -88,18 +90,34 @@ public class ManagedLedgerConfig {
     }
 
     /**
-     * @return the quorumSize
+     * @return the ackQuorumSize
      */
-    public int getQuorumSize() {
-        return quorumSize;
+    public int getAckQuorumSize() {
+        return ackQuorumSize;
     }
 
     /**
-     * @param quorumSize
-     *            the quorumSize to set
+     * @return the writeQuorumSize
      */
-    public ManagedLedgerConfig setQuorumSize(int quorumSize) {
-        this.quorumSize = quorumSize;
+    public int getWriteQuorumSize() {
+        return writeQuorumSize;
+    }
+
+    /**
+     * @param writeQuorumSize
+     *            the writeQuorumSize to set
+     */
+    public ManagedLedgerConfig setWriteQuorumSize(int writeQuorumSize) {
+        this.writeQuorumSize = writeQuorumSize;
+        return this;
+    }
+
+    /**
+     * @param ackQuorumSize
+     *            the ackQuorumSize to set
+     */
+    public ManagedLedgerConfig setAckQuorumSize(int ackQuorumSize) {
+        this.writeQuorumSize = ackQuorumSize;
         return this;
     }
 
@@ -139,31 +157,47 @@ public class ManagedLedgerConfig {
      * @return the metadataEnsemblesize
      */
     public int getMetadataEnsemblesize() {
-        return metadataEnsemblesize;
+        return metadataEnsembleSize;
     }
 
     /**
-     * @param metadataEnsemblesize
-     *            the metadataEnsemblesize to set
+     * @param metadataEnsembleSize
+     *            the metadataEnsembleSize to set
      */
-    public ManagedLedgerConfig setMetadataEnsemblesize(int metadataEnsemblesize) {
-        this.metadataEnsemblesize = metadataEnsemblesize;
+    public ManagedLedgerConfig setMetadataEnsembleSize(int metadataEnsembleSize) {
+        this.metadataEnsembleSize = metadataEnsembleSize;
         return this;
     }
 
     /**
-     * @return the metadataQuorumSize
+     * @return the metadataAckQuorumSize
      */
-    public int getMetadataQuorumSize() {
-        return metadataQuorumSize;
+    public int getMetadataAckQuorumSize() {
+        return metadataAckQuorumSize;
     }
 
     /**
-     * @param metadataQuorumSize
-     *            the metadataQuorumSize to set
+     * @return the metadataWriteQuorumSize
      */
-    public ManagedLedgerConfig setMetadataQuorumSize(int metadataQuorumSize) {
-        this.metadataQuorumSize = metadataQuorumSize;
+    public int getMetadataWriteQuorumSize() {
+        return metadataWriteQuorumSize;
+    }
+
+    /**
+     * @param metadataAckQuorumSize
+     *            the metadataAckQuorumSize to set
+     */
+    public ManagedLedgerConfig setMetadataAckQuorumSize(int metadataAckQuorumSize) {
+        this.metadataAckQuorumSize = metadataAckQuorumSize;
+        return this;
+    }
+
+    /**
+     * @param metadataWriteQuorumSize
+     *            the metadataWriteQuorumSize to set
+     */
+    public ManagedLedgerConfig setMetadataWriteQuorumSize(int metadataWriteQuorumSize) {
+        this.metadataWriteQuorumSize = metadataWriteQuorumSize;
         return this;
     }
 

@@ -42,8 +42,8 @@ public class ManagedLedgerSingleBookieTest extends BookKeeperClusterTestCase {
     public void simple() throws Exception {
         ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, zkc);
 
-        ManagedLedgerConfig config = new ManagedLedgerConfig().setEnsembleSize(1).setQuorumSize(1)
-                .setMetadataEnsemblesize(1).setMetadataQuorumSize(1);
+        ManagedLedgerConfig config = new ManagedLedgerConfig().setEnsembleSize(1).setWriteQuorumSize(1).setAckQuorumSize(1)
+                .setMetadataEnsembleSize(1).setMetadataWriteQuorumSize(1).setMetadataAckQuorumSize(1);
         ManagedLedger ledger = factory.open("my_test_ledger", config);
 
         assertEquals(ledger.getNumberOfEntries(), 0);

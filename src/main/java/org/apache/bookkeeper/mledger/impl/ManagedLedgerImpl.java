@@ -87,9 +87,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     private final CallbackMutex trimmerMutex = new CallbackMutex();
 
     /**
-     * This lock is held while the ledgers list is updated asynchronously on the
-     * metadata store. Since we use the store version, we cannot have multiple
-     * concurrent updates.
+     * This lock is held while the ledgers list is updated asynchronously on the metadata store. Since we use the store
+     * version, we cannot have multiple concurrent updates.
      */
     private final CallbackMutex ledgersListMutex = new CallbackMutex();
 
@@ -117,9 +116,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     private final ManagedLedgerFactoryImpl factory;
 
     /**
-     * Queue of pending entries to be added to the managed ledger. Typically
-     * entries are queued when a new ledger is created asynchronously and hence
-     * there is no ready ledger to write into.
+     * Queue of pending entries to be added to the managed ledger. Typically entries are queued when a new ledger is
+     * created asynchronously and hence there is no ready ledger to write into.
      */
     private final Queue<OpAddEntry> pendingAddEntries = Lists.newLinkedList();
 
@@ -243,8 +241,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         };
 
         // Create a new ledger to start writing
-        bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getQuorumSize(), config.getDigestType(),
-                config.getPassword(), new CreateCallback() {
+        bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getWriteQuorumSize(), config.getAckQuorumSize(),
+                config.getDigestType(), config.getPassword(), new CreateCallback() {
                     public void createComplete(int rc, LedgerHandle lh, Object ctx) {
                         if (rc == BKException.Code.OK) {
                             state = State.LedgerOpened;
@@ -369,8 +367,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             pendingAddEntries.add(addOperation);
             log.debug("[{}] Creating a new ledger", name);
             state = State.CreatingLedger;
-            bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getQuorumSize(), config.getDigestType(),
-                    config.getPassword(), this, ctx);
+            bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getWriteQuorumSize(),
+                    config.getAckQuorumSize(), config.getDigestType(), config.getPassword(), this, ctx);
         } else {
             checkArgument(state == State.LedgerOpened);
             checkArgument(!currentLedgerIsFull());
@@ -659,8 +657,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             // Need to create a new ledger to write pending entries
             log.debug("[{}] Creating a new ledger", name);
             state = State.CreatingLedger;
-            bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getQuorumSize(), config.getDigestType(),
-                    config.getPassword(), this, null);
+            bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getWriteQuorumSize(),
+                    config.getAckQuorumSize(), config.getDigestType(), config.getPassword(), this, null);
         }
     }
 
@@ -827,8 +825,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     }
 
     /**
-     * Checks whether there are ledger that have been fully consumed and deletes
-     * them
+     * Checks whether there are ledger that have been fully consumed and deletes them
      * 
      * @throws Exception
      */
@@ -1010,8 +1007,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     }
 
     /**
-     * Validate whether a specified position is valid for the current managed
-     * ledger.
+     * Validate whether a specified position is valid for the current managed ledger.
      * 
      * @param position
      *            the position to validate

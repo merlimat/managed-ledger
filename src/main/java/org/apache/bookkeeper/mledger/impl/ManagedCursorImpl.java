@@ -89,8 +89,8 @@ class ManagedCursorImpl implements ManagedCursor {
     }
 
     /**
-     * Performs the initial recovery, reading the mark-deleted position from the
-     * ledger and then calling initialize to have a new opened ledger
+     * Performs the initial recovery, reading the mark-deleted position from the ledger and then calling initialize to
+     * have a new opened ledger
      */
     void recover(final VoidCallback callback) {
         // Read the meta-data ledgerId from the store
@@ -345,8 +345,8 @@ class ManagedCursorImpl implements ManagedCursor {
 
     // //////////////////////////////////////////////////
     void createNewMetadataLedger(final VoidCallback callback) {
-        bookkeeper.asyncCreateLedger(config.getMetadataEnsemblesize(), config.getMetadataQuorumSize(),
-                config.getDigestType(), config.getPassword(), new CreateCallback() {
+        bookkeeper.asyncCreateLedger(config.getMetadataEnsemblesize(), config.getMetadataWriteQuorumSize(),
+                config.getMetadataAckQuorumSize(), config.getDigestType(), config.getPassword(), new CreateCallback() {
                     public void createComplete(int rc, final LedgerHandle lh, Object ctx) {
                         if (rc == BKException.Code.OK) {
                             // Created the ledger, now write the last position

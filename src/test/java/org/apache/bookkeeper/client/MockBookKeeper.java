@@ -27,8 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Test BookKeeperClient which allows access to members we don't wish to expose
- * in the public API.
+ * Test BookKeeperClient which allows access to members we don't wish to expose in the public API.
  */
 public class MockBookKeeper extends BookKeeper {
 
@@ -53,6 +52,29 @@ public class MockBookKeeper extends BookKeeper {
     }
 
     public LedgerHandle createLedger(int ensSize, int qSize, DigestType digestType, byte passwd[]) throws BKException {
+        return createLedger(ensSize, qSize, qSize, digestType, passwd);
+    }
+
+    @Override
+    public void asyncCreateLedger(int ensSize, int writeQuorumSize, int ackQuorumSize, DigestType digestType,
+            byte[] passwd, CreateCallback cb, Object ctx) {
+        if (stopped.get()) {
+            cb.createComplete(BKException.Code.WriteException, null, ctx);
+        }
+
+        try {
+            long id = sequence.getAndIncrement();
+            log.info("Creating ledger {}", id);
+            MockLedgerHandle lh = new MockLedgerHandle(this, id);
+            ledgers.put(id, lh);
+            cb.createComplete(0, lh, ctx);
+        } catch (Throwable t) {
+        }
+    }
+
+    @Override
+    public LedgerHandle createLedger(int ensSize, int writeQuorumSize, int ackQuorumSize, DigestType digestType,
+            byte[] passwd) throws BKException {
         if (stopped.get()) {
             throw BKException.create(BKException.Code.WriteException);
         }
@@ -72,18 +94,7 @@ public class MockBookKeeper extends BookKeeper {
     @Override
     public void asyncCreateLedger(int ensSize, int qSize, DigestType digestType, byte[] passwd, CreateCallback cb,
             Object ctx) {
-        if (stopped.get()) {
-            cb.createComplete(BKException.Code.WriteException, null, ctx);
-        }
-
-        try {
-            long id = sequence.getAndIncrement();
-            log.info("Creating ledger {}", id);
-            MockLedgerHandle lh = new MockLedgerHandle(this, id);
-            ledgers.put(id, lh);
-            cb.createComplete(0, lh, ctx);
-        } catch (Throwable t) {
-        }
+        asyncCreateLedger(ensSize, qSize, qSize, digestType, passwd, cb, ctx);
     }
 
     @Override
