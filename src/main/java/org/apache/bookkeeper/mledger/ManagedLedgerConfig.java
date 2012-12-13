@@ -117,7 +117,7 @@ public class ManagedLedgerConfig {
      *            the ackQuorumSize to set
      */
     public ManagedLedgerConfig setAckQuorumSize(int ackQuorumSize) {
-        this.writeQuorumSize = ackQuorumSize;
+        this.ackQuorumSize = ackQuorumSize;
         return this;
     }
 
