@@ -194,9 +194,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     if (openMode == OpenMode.AdminObserver) {
                         // When we are read-only observers we don't want to
                         // fence current ledgers
+                        log.debug("[{}] Opening leader {} read only", name, id);
                         bookKeeper.asyncOpenLedgerNoRecovery(id, config.getDigestType(), config.getPassword(), opencb,
                                 null);
                     } else {
+                        log.debug("[{}] Opening leader {} read-write", name, id);
                         bookKeeper.asyncOpenLedger(id, config.getDigestType(), config.getPassword(), opencb, null);
                     }
                 } else {
@@ -210,7 +212,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         });
     }
 
-    private synchronized void initializeBookKeeper(OpenMode openMode,
+    private synchronized void initializeBookKeeper(final OpenMode openMode,
             final ManagedLedgerInitializeLedgerCallback callback) {
         log.debug("[{}] initializing bookkeeper; ledgers {}", name, ledgers);
 
@@ -223,7 +225,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         if (openMode == OpenMode.AdminObserver) {
             // We are not opening a new ledger
             ledgersListMutex.unlock();
-            initializeCursors(callback);
+            initializeCursors(openMode, callback);
             return;
         }
 
@@ -231,7 +233,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             public void operationComplete(Void v, Version version) {
                 ledgersVersion = version;
                 ledgersListMutex.unlock();
-                initializeCursors(callback);
+                initializeCursors(openMode, callback);
             }
 
             public void operationFailed(MetaStoreException e) {
@@ -262,7 +264,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 }, null);
     }
 
-    private void initializeCursors(final ManagedLedgerInitializeLedgerCallback callback) {
+    private void initializeCursors(final OpenMode openMode, final ManagedLedgerInitializeLedgerCallback callback) {
         log.debug("[{}] initializing cursors", name);
         store.getConsumers(name, new MetaStoreCallback<List<String>>() {
             public void operationComplete(List<String> consumers, Version v) {
@@ -277,8 +279,13 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
                 for (final String cursorName : consumers) {
                     log.debug("[{}] Loading cursor {}", name, cursorName);
-                    final ManagedCursorImpl cursor = new ManagedCursorImpl(bookKeeper, config, ManagedLedgerImpl.this,
-                            cursorName);
+                    final ManagedCursorImpl cursor;
+                    if (openMode == OpenMode.AdminObserver) {
+                        cursor = new ManagedCursorAdminOnlyImpl(bookKeeper, config, ManagedLedgerImpl.this, cursorName);
+                    } else {
+                        cursor = new ManagedCursorImpl(bookKeeper, config, ManagedLedgerImpl.this, cursorName);
+                    }
+
                     cursor.recover(new VoidCallback() {
                         public void operationComplete() {
                             log.debug("[{}] Recovery for cursor {} completed. todo={}",
@@ -846,7 +853,9 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 // include lastLedger in the trimming.
                 slowestReaderLedgerId = currentLedger.getId() + 1;
             } else {
-                slowestReaderLedgerId = cursors.getSlowestReaderPosition().getLedgerId();
+                PositionImpl slowestReaderPosition = cursors.getSlowestReaderPosition();
+                assert slowestReaderPosition != null;
+                slowestReaderLedgerId = slowestReaderPosition.getLedgerId();
             }
 
             for (LedgerInfo ls : ledgers.headMap(slowestReaderLedgerId, false).values()) {
@@ -1031,8 +1040,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 || currentLedgerSize >= (config.getMaxSizePerLedgerMb() * MegaByte);
     }
 
-    public Iterable<LedgerInfo> getLedgersInfo() {
-        return ledgers.values();
+    public synchronized Iterable<LedgerInfo> getLedgersInfo() {
+        return Lists.newArrayList(ledgers.values());
     }
 
     Executor getExecutor() {

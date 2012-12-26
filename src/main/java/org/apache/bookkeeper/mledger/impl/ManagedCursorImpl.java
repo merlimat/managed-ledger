@@ -59,8 +59,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 @ThreadSafe
 class ManagedCursorImpl implements ManagedCursor {
 
-    private final BookKeeper bookkeeper;
-    private final ManagedLedgerConfig config;
+    protected final BookKeeper bookkeeper;
+    protected final ManagedLedgerConfig config;
     private final ManagedLedgerImpl ledger;
     private final String name;
 
@@ -109,10 +109,8 @@ class ManagedCursorImpl implements ManagedCursor {
         });
     }
 
-    private void recoverFromLedger(final long ledgerId, final VoidCallback callback) {
-        // Read the acknowledged position from the metadata ledger, then create
-        // a new ledger and write the position into it
-        bookkeeper.asyncOpenLedger(ledgerId, config.getDigestType(), config.getPassword(), new OpenCallback() {
+    protected OpenCallback getOpenCallback(final long ledgerId, final VoidCallback callback, final boolean isReadOnly) {
+        return new OpenCallback() {
             public void openComplete(int rc, LedgerHandle lh, Object ctx) {
 
                 if (rc != BKException.Code.OK) {
@@ -145,15 +143,26 @@ class ManagedCursorImpl implements ManagedCursor {
 
                         PositionImpl position = new PositionImpl(positionInfo);
                         log.debug("[{}] Consumer {} recovered to position {}", va(ledger.getName(), name, position));
-                        initialize(position, callback);
-                        lh.asyncClose(new CloseCallback() {
-                            public void closeComplete(int rc, LedgerHandle lh, Object ctx) {
-                            }
-                        }, null);
+                        if (isReadOnly) {
+                            setAcknowledgedPosition(position);
+                        } else {
+                            initialize(position, callback);
+                            lh.asyncClose(new CloseCallback() {
+                                public void closeComplete(int rc, LedgerHandle lh, Object ctx) {
+                                }
+                            }, null);
+                        }
                     }
                 }, null);
             }
-        }, null);
+        };
+    }
+
+    protected void recoverFromLedger(final long ledgerId, final VoidCallback callback) {
+        // Read the acknowledged position from the metadata ledger, then create
+        // a new ledger and write the position into it
+        bookkeeper.asyncOpenLedger(ledgerId, config.getDigestType(), config.getPassword(),
+                getOpenCallback(ledgerId, callback, false), null);
     }
 
     void initialize(final PositionImpl position, final VoidCallback callback) {
@@ -311,13 +320,13 @@ class ManagedCursorImpl implements ManagedCursor {
     }
 
     @Override
-    public void skip(int entries) {
+    public void skip(int entries) throws ManagedLedgerException {
         checkArgument(entries > 0);
         readPosition.set(ledger.skipEntries(readPosition.get(), entries));
     }
 
     @Override
-    public void seek(Position newReadPositionInt) {
+    public void seek(Position newReadPositionInt) throws ManagedLedgerException {
         checkArgument(newReadPositionInt instanceof PositionImpl);
         PositionImpl newReadPosition = (PositionImpl) newReadPositionInt;
         checkArgument(newReadPosition.compareTo(acknowledgedPosition.get()) > 0,

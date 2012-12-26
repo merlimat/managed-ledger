@@ -127,7 +127,7 @@ public interface ManagedCursor {
      * @param n
      *            the number of messages the cursor has to skip
      */
-    public void skip(int n);
+    public void skip(int n) throws ManagedLedgerException;
 
     /**
      * Move the cursor to a different read position.
@@ -138,7 +138,7 @@ public interface ManagedCursor {
      * @param newReadPosition
      *            the position where to move the cursor
      */
-    public void seek(Position newReadPosition);
+    public void seek(Position newReadPosition) throws ManagedLedgerException;
 
     /**
      * Close the cursor and releases the associated resources.
