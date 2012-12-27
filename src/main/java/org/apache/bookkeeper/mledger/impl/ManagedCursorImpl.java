@@ -112,7 +112,7 @@ class ManagedCursorImpl implements ManagedCursor {
     protected OpenCallback getOpenCallback(final long ledgerId, final VoidCallback callback, final boolean isReadOnly) {
         return new OpenCallback() {
             public void openComplete(int rc, LedgerHandle lh, Object ctx) {
-
+                log.debug("[{}] Opened ledger {} for consumer {}. rc={}", va(ledger.getName(), ledgerId, rc));
                 if (rc != BKException.Code.OK) {
                     log.warn("[{}] Error opening metadata ledger {} for consumer {}: {}",
                             va(ledger.getName(), ledgerId, name, BKException.create(rc)));
@@ -145,6 +145,7 @@ class ManagedCursorImpl implements ManagedCursor {
                         log.debug("[{}] Consumer {} recovered to position {}", va(ledger.getName(), name, position));
                         if (isReadOnly) {
                             setAcknowledgedPosition(position);
+                            callback.operationComplete();
                         } else {
                             initialize(position, callback);
                             lh.asyncClose(new CloseCallback() {
