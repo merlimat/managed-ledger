@@ -84,7 +84,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     AtomicLong numberOfEntries = new AtomicLong(0);
     AtomicLong totalSize = new AtomicLong(0);
 
-    private final CallbackMutex trimmerMutex = new CallbackMutex();
+    private final Object trimmerMutex = new Object();
 
     /**
      * This lock is held while the ledgers list is updated asynchronously on the metadata store. Since we use the store
@@ -826,7 +826,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     void trimConsumedLedgersInBackground() {
         executor.execute(new Runnable() {
             public void run() {
-                internalTrimConsumedLedgers();
+                // Ensure only one trimming operation is active
+                synchronized (trimmerMutex) {
+                    internalTrimConsumedLedgers();
+                }
             }
         });
     }
@@ -837,9 +840,6 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
      * @throws Exception
      */
     void internalTrimConsumedLedgers() {
-        // Ensure only one trimming operation is active
-        trimmerMutex.lock();
-
         List<LedgerInfo> ledgersToDelete = Lists.newArrayList();
 
         synchronized (this) {
@@ -868,7 +868,6 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             }
 
             if (ledgersToDelete.isEmpty()) {
-                trimmerMutex.unlock();
                 return;
             }
         }
@@ -880,14 +879,13 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         for (LedgerInfo ls : ledgersToDelete) {
             log.info("[{}] Removing ledger {}", name, ls.getLedgerId());
             try {
-                bookKeeper.deleteLedger(ls.getLedgerId());
                 ++removedCount;
                 removedSize += ls.getSize();
+                bookKeeper.deleteLedger(ls.getLedgerId());
             } catch (BKNoSuchLedgerExistsException e) {
                 log.warn("[{}] Ledger was already deleted {}", name, ls.getLedgerId());
             } catch (Exception e) {
                 log.error("[{}] Error deleting ledger {}", name, ls.getLedgerId());
-                trimmerMutex.unlock();
                 return;
             }
         }
@@ -907,12 +905,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                         internalTrimConsumedLedgers();
                     }
                 }, 100, TimeUnit.MILLISECONDS);
-
-                trimmerMutex.unlock();
                 return;
             }
 
             ledgersListMutex.lock();
+            final CountDownLatch latch = new CountDownLatch(1);
 
             log.debug("Updating of ledgers list after trimming");
             ManagedLedgerInfo mlInfo = ManagedLedgerInfo.newBuilder().addAllLedgerInfo(ledgers.values()).build();
@@ -921,16 +918,22 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     log.info("[{}] End TrimConsumedLedgers. ledgers={} entries={}",
                             va(name, ledgers.size(), totalSize.get()));
                     ledgersVersion = version;
-                    ledgersListMutex.unlock();
-                    trimmerMutex.unlock();
+                    latch.countDown();
                 }
 
                 public void operationFailed(MetaStoreException e) {
                     log.error("[{}] Failed to update the list of ledgers after trimming", name, e);
-                    ledgersListMutex.unlock();
-                    trimmerMutex.unlock();
+                    latch.countDown();
                 }
             });
+
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                log.error("[{}] Interrupted while updating ledgers list", name, e);
+            } finally {
+                ledgersListMutex.unlock();
+            }
         }
     }
 
