@@ -112,7 +112,7 @@ class ManagedCursorImpl implements ManagedCursor {
     protected OpenCallback getOpenCallback(final long ledgerId, final VoidCallback callback, final boolean isReadOnly) {
         return new OpenCallback() {
             public void openComplete(int rc, LedgerHandle lh, Object ctx) {
-                log.debug("[{}] Opened ledger {} for consumer {}. rc={}", va(ledger.getName(), ledgerId, rc));
+                log.debug("[{}] Opened ledger {} for consumer {}. rc={}", va(ledger.getName(), ledgerId, name, rc));
                 if (rc != BKException.Code.OK) {
                     log.warn("[{}] Error opening metadata ledger {} for consumer {}: {}",
                             va(ledger.getName(), ledgerId, name, BKException.create(rc)));

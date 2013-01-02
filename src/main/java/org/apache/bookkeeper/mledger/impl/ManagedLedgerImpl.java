@@ -168,6 +168,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     final long id = ledgers.lastKey();
                     OpenCallback opencb = new OpenCallback() {
                         public void openComplete(int rc, LedgerHandle lh, Object ctx) {
+                            log.debug("[{}] Opened ledger {}: ", va(name, id, BKException.getMessage(rc)));
                             if (rc == BKException.Code.OK) {
                                 LedgerInfo info = LedgerInfo.newBuilder().setLedgerId(id)
                                         .setEntries(lh.getLastAddConfirmed() + 1).setSize(lh.getLength()).build();
@@ -185,6 +186,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                                 log.warn("[{}] Ledger not found: {}", name, ledgers.lastKey());
                                 initializeBookKeeper(openMode, callback);
                             } else {
+                                log.error("[{}] Failed to open ledger {}: {}", va(name, id, BKException.getMessage(rc)));
                                 callback.initializeFailed(new ManagedLedgerException(BKException.create(rc)));
                                 return;
                             }
@@ -194,11 +196,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     if (openMode == OpenMode.AdminObserver) {
                         // When we are read-only observers we don't want to
                         // fence current ledgers
-                        log.debug("[{}] Opening leader {} read only", name, id);
+                        log.debug("[{}] Opening legder {} read only", name, id);
                         bookKeeper.asyncOpenLedgerNoRecovery(id, config.getDigestType(), config.getPassword(), opencb,
                                 null);
                     } else {
-                        log.debug("[{}] Opening leader {} read-write", name, id);
+                        log.debug("[{}] Opening legder {} read-write", name, id);
                         bookKeeper.asyncOpenLedger(id, config.getDigestType(), config.getPassword(), opencb, null);
                     }
                 } else {
@@ -969,6 +971,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         long count = 0;
         // First count the number of unread entries in the ledger pointed by
         // position
+        log.debug("[{}] getNumberOfEntries. ledgers={} position={}", va(name, ledgers, position));
         count += ledgers.get(position.getLedgerId()).getEntries() - position.getEntryId();
 
         // Then, recur all the next ledgers and sum all the entries they contain
