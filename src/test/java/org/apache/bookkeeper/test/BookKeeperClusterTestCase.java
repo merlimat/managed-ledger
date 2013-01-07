@@ -30,7 +30,7 @@ public abstract class BookKeeperClusterTestCase {
     static final Logger LOG = LoggerFactory.getLogger(BookKeeperClusterTestCase.class);
 
     // ZooKeeper related variables
-    protected ZooKeeper zkc;
+    protected MockZooKeeper zkc;
 
     // BookKeeper related variables
     protected MockBookKeeper bkc;
@@ -86,7 +86,7 @@ public abstract class BookKeeperClusterTestCase {
     }
 
     protected void stopZooKeeper() throws Exception {
-        zkc.close();
+        zkc.shutdown();
     }
 
 }

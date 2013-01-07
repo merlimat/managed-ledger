@@ -15,6 +15,8 @@ package org.apache.bookkeeper.client;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -30,6 +32,8 @@ import org.slf4j.LoggerFactory;
  * Test BookKeeperClient which allows access to members we don't wish to expose in the public API.
  */
 public class MockBookKeeper extends BookKeeper {
+
+    Executor executor = Executors.newFixedThreadPool(1);
 
     public ZooKeeper getZkHandle() {
         return super.getZkHandle();
@@ -57,19 +61,24 @@ public class MockBookKeeper extends BookKeeper {
 
     @Override
     public void asyncCreateLedger(int ensSize, int writeQuorumSize, int ackQuorumSize, DigestType digestType,
-            byte[] passwd, CreateCallback cb, Object ctx) {
-        if (stopped.get()) {
-            cb.createComplete(BKException.Code.WriteException, null, ctx);
-        }
+            byte[] passwd, final CreateCallback cb, final Object ctx) {
+        executor.execute(new Runnable() {
+            public void run() {
 
-        try {
-            long id = sequence.getAndIncrement();
-            log.info("Creating ledger {}", id);
-            MockLedgerHandle lh = new MockLedgerHandle(this, id);
-            ledgers.put(id, lh);
-            cb.createComplete(0, lh, ctx);
-        } catch (Throwable t) {
-        }
+                if (stopped.get()) {
+                    cb.createComplete(BKException.Code.WriteException, null, ctx);
+                }
+
+                try {
+                    long id = sequence.getAndIncrement();
+                    log.info("Creating ledger {}", id);
+                    MockLedgerHandle lh = new MockLedgerHandle(MockBookKeeper.this, id);
+                    ledgers.put(id, lh);
+                    cb.createComplete(0, lh, ctx);
+                } catch (Throwable t) {
+                }
+            }
+        });
     }
 
     @Override

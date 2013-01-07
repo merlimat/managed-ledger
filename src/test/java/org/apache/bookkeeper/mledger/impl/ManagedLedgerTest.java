@@ -225,7 +225,6 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
                                         assertEquals(entries.size(), 1);
                                         Entry entry = entries.get(0);
                                         assertEquals(new String(entry.getData(), Encoding), "test");
-                                        counter.countDown();
 
                                         log.debug("Mark-Deleting to position {}", entry.getPosition());
                                         cursor.asyncMarkDelete(entry.getPosition(), new MarkDeleteCallback() {
