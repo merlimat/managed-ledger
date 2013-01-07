@@ -16,6 +16,7 @@ package org.apache.bookkeeper.test;
 import org.apache.bookkeeper.client.MockBookKeeper;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.zookeeper.MockZooKeeper;
+import org.apache.zookeeper.ZooKeeper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterMethod;
@@ -29,7 +30,7 @@ public abstract class BookKeeperClusterTestCase {
     static final Logger LOG = LoggerFactory.getLogger(BookKeeperClusterTestCase.class);
 
     // ZooKeeper related variables
-    protected MockZooKeeper zkc;
+    protected ZooKeeper zkc;
 
     // BookKeeper related variables
     protected MockBookKeeper bkc;
@@ -70,7 +71,7 @@ public abstract class BookKeeperClusterTestCase {
      * @throws Exception
      */
     protected void startBookKeeper() throws Exception {
-        zkc = new MockZooKeeper();
+        zkc = MockZooKeeper.newInstance();
         for (int i = 0; i < numBookies; i++) {
             zkc.create("/ledgers/available/192.168.1.1:" + (5000 + i), "".getBytes(), null, null);
         }
@@ -85,7 +86,7 @@ public abstract class BookKeeperClusterTestCase {
     }
 
     protected void stopZooKeeper() throws Exception {
-        zkc.shutdown();
+        zkc.close();
     }
 
 }

@@ -1,5 +1,6 @@
 package org.apache.zookeeper;
 
+import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
@@ -19,23 +20,48 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.internal.annotations.Sets;
 
+import sun.reflect.ReflectionFactory;
+
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.SetMultimap;
 import com.google.inject.internal.Maps;
 
-@SuppressWarnings("deprecation")
+@SuppressWarnings({ "deprecation", "restriction", "rawtypes" })
 public class MockZooKeeper extends ZooKeeper {
-    TreeMap<String, String> tree = Maps.newTreeMap();
-    SetMultimap<String, Watcher> watchers = HashMultimap.create();
-    AtomicBoolean stopped = new AtomicBoolean(false);
+    private TreeMap<String, String> tree;
+    private SetMultimap<String, Watcher> watchers;
+    private AtomicBoolean stopped;
 
-    public MockZooKeeper() throws Exception {
-        super("0.0.0.0:99", 1, new Watcher() {
+    public static ZooKeeper newInstance() {
+        try {
+            ReflectionFactory rf = ReflectionFactory.getReflectionFactory();
+            Constructor objDef = Object.class.getDeclaredConstructor(new Class[0]);
+            Constructor intConstr = rf.newConstructorForSerialization(MockZooKeeper.class, objDef);
+            MockZooKeeper zk = MockZooKeeper.class.cast(intConstr.newInstance());
+            zk.init();
+            return zk;
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot create object", e);
+        }
+    }
+
+    private void init() {
+        tree = Maps.newTreeMap();
+        watchers = HashMultimap.create();
+        stopped = new AtomicBoolean(false);
+    }
+
+    private MockZooKeeper(String quorum) throws Exception {
+        // This constructor is never called
+        super(quorum, 1, new Watcher() {
             @Override
             public void process(WatchedEvent event) {
             }
         });
+        assert false;
     }
 
     @Override
@@ -44,7 +70,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public String create(String path, byte[] data, List<ACL> acl, CreateMode createMode) throws KeeperException,
+    public synchronized String create(String path, byte[] data, List<ACL> acl, CreateMode createMode) throws KeeperException,
             InterruptedException {
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
@@ -57,7 +83,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void create(String path, byte[] data, List<ACL> acl, CreateMode createMode, StringCallback cb, Object ctx) {
+    public synchronized void create(String path, byte[] data, List<ACL> acl, CreateMode createMode, StringCallback cb, Object ctx) {
         if (stopped.get()) {
             cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx, null);
         } else if (tree.containsKey(path)) {
@@ -69,7 +95,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public byte[] getData(String path, Watcher watcher, Stat stat) throws KeeperException {
+    public synchronized byte[] getData(String path, Watcher watcher, Stat stat) throws KeeperException {
         String value = tree.get(path);
         if (value == null) {
             throw new KeeperException.NoNodeException(path);
@@ -81,7 +107,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void getData(String path, boolean watch, DataCallback cb, Object ctx) {
+    public synchronized void getData(String path, boolean watch, DataCallback cb, Object ctx) {
         if (stopped.get()) {
             cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null, null);
             return;
@@ -96,7 +122,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void getData(String path, Watcher watcher, DataCallback cb, Object ctx) {
+    public synchronized void getData(String path, Watcher watcher, DataCallback cb, Object ctx) {
         if (stopped.get()) {
             cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx, null, null);
             return;
@@ -114,7 +140,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void getChildren(String path, Watcher watcher, ChildrenCallback cb, Object ctx) {
+    public synchronized void getChildren(String path, Watcher watcher, ChildrenCallback cb, Object ctx) {
         if (stopped.get()) {
             cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null);
             return;
@@ -138,7 +164,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public List<String> getChildren(String path, boolean watch) throws KeeperException, InterruptedException {
+    public synchronized List<String> getChildren(String path, boolean watch) throws KeeperException, InterruptedException {
         if (stopped.get()) {
             throw new KeeperException.ConnectionLossException();
         }
@@ -162,7 +188,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void getChildren(String path, boolean watcher, Children2Callback cb, Object ctx) {
+    public synchronized void getChildren(String path, boolean watcher, Children2Callback cb, Object ctx) {
         if (stopped.get()) {
             cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null, null);
             return;
@@ -190,7 +216,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public Stat exists(String path, boolean watch) throws KeeperException, InterruptedException {
+    public synchronized Stat exists(String path, boolean watch) throws KeeperException, InterruptedException {
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
 
@@ -202,7 +228,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public Stat setData(String path, byte[] data, int version) throws KeeperException, InterruptedException {
+    public synchronized Stat setData(String path, byte[] data, int version) throws KeeperException, InterruptedException {
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
 
@@ -219,7 +245,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void setData(String path, byte[] data, int version, StatCallback cb, Object ctx) {
+    public synchronized void setData(String path, byte[] data, int version, StatCallback cb, Object ctx) {
         if (stopped.get()) {
             cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null);
             return;
@@ -236,7 +262,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void delete(String path, int version) throws InterruptedException, KeeperException {
+    public synchronized void delete(String path, int version) throws InterruptedException, KeeperException {
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
         if (!tree.containsKey(path))
@@ -251,7 +277,7 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public void delete(String path, int version, VoidCallback cb, Object ctx) {
+    public synchronized void delete(String path, int version, VoidCallback cb, Object ctx) {
         if (stopped.get()) {
             cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx);
         } else if (!tree.containsKey(path)) {
@@ -268,9 +294,11 @@ public class MockZooKeeper extends ZooKeeper {
         }
     }
 
-    public void shutdown() {
+    @Override
+    public synchronized void close() throws InterruptedException {
         stopped.set(true);
         tree.clear();
+        watchers.clear();
     }
 
     private static final Logger log = LoggerFactory.getLogger(MockZooKeeper.class);
