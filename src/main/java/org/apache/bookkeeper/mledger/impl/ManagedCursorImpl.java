@@ -397,6 +397,7 @@ class ManagedCursorImpl implements ManagedCursor {
     void persistPosition(final LedgerHandle lh, final PositionImpl position, final VoidCallback callback) {
         PositionInfo pi = position.getPositionInfo();
         try {
+            log.debug("Appending to ledger={} position={}", lh.getId(), position);
             lh.asyncAddEntry(pi.toByteArray(), new AddCallback() {
                 public void addComplete(int rc, LedgerHandle lh, long entryId, Object ctx) {
                     if (rc == BKException.Code.OK) {
@@ -404,23 +405,27 @@ class ManagedCursorImpl implements ManagedCursor {
                                 va(ledger.getName(), position, lh.getId()));
                         callback.operationComplete();
 
-                        if (lh.getLastAddConfirmed() >= config.getMetadataMaxEntriesPerLedger()) {
+                        if (lh.getLastAddConfirmed() == config.getMetadataMaxEntriesPerLedger()) {
                             log.debug("[{}] Need to create new metadata ledger for consumer {}", ledger.getName(), name);
 
-                            ledgerMutex.lockWrite();
+                            // Force to create a new ledger in a background thread
+                            ledger.getExecutor().execute(new Runnable() {
+                                public void run() {
+                                    ledgerMutex.lockWrite();
 
-                            // Force to create a new ledger
-                            createNewMetadataLedger(new VoidCallback() {
-                                public void operationComplete() {
-                                    log.debug("[{}] Created new metadata ledger for consumer {}", ledger.getName(),
-                                            name);
-                                    ledgerMutex.unlockWrite();
-                                }
+                                    createNewMetadataLedger(new VoidCallback() {
+                                        public void operationComplete() {
+                                            log.debug("[{}] Created new metadata ledger for consumer {}",
+                                                    ledger.getName(), name);
+                                            ledgerMutex.unlockWrite();
+                                        }
 
-                                public void operationFailed(ManagedLedgerException exception) {
-                                    log.warn("[{}] Failed to create new metadata ledger for consumer {}: {}",
-                                            va(ledger.getName(), name, exception));
-                                    ledgerMutex.unlockWrite();
+                                        public void operationFailed(ManagedLedgerException exception) {
+                                            log.warn("[{}] Failed to create new metadata ledger for consumer {}: {}",
+                                                    va(ledger.getName(), name, exception));
+                                            ledgerMutex.unlockWrite();
+                                        }
+                                    });
                                 }
                             });
                         }
