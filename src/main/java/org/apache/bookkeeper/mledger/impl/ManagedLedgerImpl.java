@@ -84,13 +84,12 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     AtomicLong numberOfEntries = new AtomicLong(0);
     AtomicLong totalSize = new AtomicLong(0);
 
-    private final Object trimmerMutex = new Object();
-
     /**
      * This lock is held while the ledgers list is updated asynchronously on the metadata store. Since we use the store
      * version, we cannot have multiple concurrent updates.
      */
     private final CallbackMutex ledgersListMutex = new CallbackMutex();
+    private final CallbackMutex trimmerMutex = new CallbackMutex();
 
     private LedgerHandle currentLedger;
     private long currentLedgerEntries = 0;
@@ -770,6 +769,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         OpReadEntry opReadEntry = (OpReadEntry) ctx;
 
         if (rc != BKException.Code.OK) {
+            log.error("[{}] Error opening ledger: {}", name, opReadEntry.readPosition);
             opReadEntry.failed(new ManagedLedgerException(BKException.create(rc)));
             return;
         }
@@ -812,11 +812,6 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
     synchronized void updateCursor(ManagedCursorImpl cursor, PositionImpl oldPosition, PositionImpl newPosition) {
         // checkFenced();
-        // First update the metadata store, so that if we don't succeed we have
-        // not changed any other state
-        // store.updateConsumer(name, cursor.getName(), newPosition);
-        // PositionImpl oldPosition =
-        // cursor.setAcknowledgedPosition(newPosition);
         cursors.cursorUpdated(cursor);
 
         if (oldPosition.getLedgerId() != newPosition.getLedgerId()) {
@@ -828,10 +823,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     void trimConsumedLedgersInBackground() {
         executor.execute(new Runnable() {
             public void run() {
-                // Ensure only one trimming operation is active
-                synchronized (trimmerMutex) {
-                    internalTrimConsumedLedgers();
-                }
+                internalTrimConsumedLedgers();
             }
         });
     }
@@ -842,6 +834,9 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
      * @throws Exception
      */
     void internalTrimConsumedLedgers() {
+        // Ensure only one trimming operation is active
+        trimmerMutex.lock();
+
         List<LedgerInfo> ledgersToDelete = Lists.newArrayList();
 
         synchronized (this) {
@@ -870,6 +865,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             }
 
             if (ledgersToDelete.isEmpty()) {
+                trimmerMutex.unlock();
                 return;
             }
         }
@@ -888,6 +884,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 log.warn("[{}] Ledger was already deleted {}", name, ls.getLedgerId());
             } catch (Exception e) {
                 log.error("[{}] Error deleting ledger {}", name, ls.getLedgerId());
+                trimmerMutex.unlock();
                 return;
             }
         }
@@ -907,11 +904,12 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                         internalTrimConsumedLedgers();
                     }
                 }, 100, TimeUnit.MILLISECONDS);
+
+                trimmerMutex.unlock();
                 return;
             }
 
             ledgersListMutex.lock();
-            final CountDownLatch latch = new CountDownLatch(1);
 
             log.debug("Updating of ledgers list after trimming");
             ManagedLedgerInfo mlInfo = ManagedLedgerInfo.newBuilder().addAllLedgerInfo(ledgers.values()).build();
@@ -920,22 +918,16 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     log.info("[{}] End TrimConsumedLedgers. ledgers={} entries={}",
                             va(name, ledgers.size(), totalSize.get()));
                     ledgersVersion = version;
-                    latch.countDown();
+                    ledgersListMutex.unlock();
+                    trimmerMutex.unlock();
                 }
 
                 public void operationFailed(MetaStoreException e) {
                     log.error("[{}] Failed to update the list of ledgers after trimming", name, e);
-                    latch.countDown();
+                    ledgersListMutex.unlock();
+                    trimmerMutex.unlock();
                 }
             });
-
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                log.error("[{}] Interrupted while updating ledgers list", name, e);
-            } finally {
-                ledgersListMutex.unlock();
-            }
         }
     }
 
