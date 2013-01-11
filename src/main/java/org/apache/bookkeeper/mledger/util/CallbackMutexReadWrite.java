@@ -13,17 +13,13 @@
  */
 package org.apache.bookkeeper.mledger.util;
 
-import java.util.Map;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Maps;
 
 /**
  * Read/Write Mutex that can be lock from one thread and released from a different one. There can be multiple readers
@@ -33,63 +29,57 @@ public class CallbackMutexReadWrite {
     private final Lock lock = new ReentrantLock(true);
     private final Condition condition = lock.newCondition();
     private final Semaphore semaphore = new Semaphore(1, true);
-    private AtomicInteger readers = new AtomicInteger(0);
+    private int readers = 0;
 
     private String writeThread;
     private String writeThreadPosition;
-    private Map<String, String> readerThreads = Maps.newHashMap();
 
     public void lockRead() {
-        log.debug("lockRead entering");
+        log.debug("{} lockRead entering", hashCode());
         semaphore.acquireUninterruptibly();
         lock.lock();
-        int r = readers.incrementAndGet();
+        ++readers;
 
-        String threadName = Thread.currentThread().getName();
-        String threadPosition = Thread.currentThread().getStackTrace()[2].toString();
-        readerThreads.put(threadName, threadPosition);
+        log.debug("{} lockRead got lock readers={}", this, readers);
 
         lock.unlock();
         semaphore.release();
-        log.debug("lockRead got lock readers={} at {} ", r, threadPosition);
     }
 
     public void unlockRead() {
-        log.debug("unlockRead entering");
+        log.debug("{} unlockRead entering", hashCode());
         lock.lock();
-        int r = readers.decrementAndGet();
-        if (r == 0) {
-            log.debug("unlockRead signal writer");
+        --readers;
+        if (readers == 0) {
+            log.debug("{} unlockRead signal writer", hashCode());
             condition.signalAll();
         }
 
+        log.debug("{} unlockRead released --- readers={}", hashCode(), readers);
         lock.unlock();
-        log.debug("unlockRead released --- readers={}", r);
     }
 
     public void lockWrite() {
-        log.debug("lockWrite entering");
+        log.debug("{} lockWrite entering", hashCode());
         semaphore.acquireUninterruptibly();
         lock.lock();
-
         writeThread = Thread.currentThread().getName();
         writeThreadPosition = Thread.currentThread().getStackTrace()[2].toString();
 
-        if (readers.get() > 0) {
+        if (readers > 0) {
             // Wait until all the readers are done.
-            log.debug("lockWrite wait for {} readers", readers);
+            log.debug("{} lockWrite wait for {} readers", hashCode(), readers);
             condition.awaitUninterruptibly();
         }
 
         lock.unlock();
-        log.debug("<<<<<<<<  lockWrite got lock at {}", writeThreadPosition);
+        log.debug("<<<<<<<<  {} lockWrite got lock at {}", hashCode(), writeThreadPosition);
     }
 
     public void unlockWrite() {
+        log.debug(">>>> {} unlockWrite that was locked by {}", hashCode(), writeThread);
         writeThread = null;
         writeThreadPosition = null;
-
-        log.debug(">>>> unlockWrite");
         semaphore.release();
     }
 
