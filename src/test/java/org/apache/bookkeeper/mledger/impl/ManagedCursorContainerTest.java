@@ -100,7 +100,7 @@ public class ManagedCursorContainerTest {
         @Override
         public void seek(Position newReadPosition) {
         }
-        
+
         @Override
         public void close() {
         }
@@ -155,6 +155,28 @@ public class ManagedCursorContainerTest {
         assertEquals(container.getSlowestReaderPosition(), new PositionImpl(6, 5));
 
         assertEquals(container.toString(), "[test6=6:5]");
+    }
+
+    @Test
+    void updatingCursorOutsideContainer() throws Exception {
+        ManagedCursorContainer container = new ManagedCursorContainer();
+
+        ManagedCursor cursor1 = new MockManagedCursor(container, "test1", new PositionImpl(5, 5));
+        container.add(cursor1);
+        assertEquals(container.getSlowestReaderPosition(), new PositionImpl(5, 5));
+
+        MockManagedCursor cursor2 = new MockManagedCursor(container, "test2", new PositionImpl(2, 2));
+        container.add(cursor2);
+        assertEquals(container.getSlowestReaderPosition(), new PositionImpl(2, 2));
+
+        cursor2.position = new PositionImpl(8, 8);
+
+        // Until we don't update the container, the ordering will not change
+        assertEquals(container.getSlowestReaderPosition(), new PositionImpl(2, 2));
+
+        container.cursorUpdated(cursor2);
+
+        assertEquals(container.getSlowestReaderPosition(), new PositionImpl(5, 5));
     }
 
 }

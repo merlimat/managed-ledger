@@ -841,7 +841,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
         synchronized (this) {
             log.debug("[{}] Start TrimConsumedLedgers. ledgers={} entries={}",
-                    va(name, ledgers.size(), totalSize.get()));
+                    va(name, ledgers.keySet(), totalSize.get()));
 
             long slowestReaderLedgerId = -1;
             if (cursors.isEmpty()) {
@@ -854,6 +854,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 assert slowestReaderPosition != null;
                 slowestReaderLedgerId = slowestReaderPosition.getLedgerId();
             }
+
+            log.debug("[{}] Slowest consumer ledger id: {}", name, slowestReaderLedgerId);
 
             for (LedgerInfo ls : ledgers.headMap(slowestReaderLedgerId, false).values()) {
                 if (ls.getLedgerId() == currentLedger.getId()) {

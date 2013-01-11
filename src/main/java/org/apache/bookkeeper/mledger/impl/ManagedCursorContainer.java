@@ -43,7 +43,8 @@ import com.google.common.collect.Maps;
 class ManagedCursorContainer {
 
     private static class Node {
-        ManagedCursor data;
+        ManagedCursor cursor;
+        PositionImpl position;
         Node previous;
         Node next;
     }
@@ -59,7 +60,8 @@ class ManagedCursorContainer {
 
         // Append a new entry at the end of the list
         Node node = new Node();
-        node.data = cursor;
+        node.cursor = cursor;
+        node.position = (PositionImpl) cursor.getMarkDeletedPosition();
         node.next = null;
         node.previous = tail;
         if (head == null)
@@ -77,7 +79,7 @@ class ManagedCursorContainer {
     public ManagedCursor get(String name) {
         Node node = cursorEntries.get(name);
         if (node != null)
-            return node.data;
+            return node.cursor;
         else
             return null;
     }
@@ -116,6 +118,7 @@ class ManagedCursorContainer {
 
         // The cursor can only move forward, so we need to push it toward the
         // end of the list to ensure the list maintains the order.
+        node.position = (PositionImpl)cursor.getMarkDeletedPosition();
         pushTowardTail(node);
     }
 
@@ -129,7 +132,7 @@ class ManagedCursorContainer {
         if (head == null)
             return null;
         else
-            return (PositionImpl) head.data.getMarkDeletedPosition();
+            return (PositionImpl) head.position;
     }
 
     /**
@@ -142,8 +145,8 @@ class ManagedCursorContainer {
     private void pushTowardHead(Node node) {
         while (node.previous != null) {
             // While this node is "bigger" than its previous, swap the two.
-            long currentId = ((PositionImpl) node.data.getMarkDeletedPosition()).getLedgerId();
-            long previousId = ((PositionImpl) node.previous.data.getMarkDeletedPosition()).getLedgerId();
+            long currentId = node.position.getLedgerId();
+            long previousId = node.previous.position.getLedgerId();
             if (currentId < previousId) {
                 // Swap the 2 entries
                 if (node.previous == head)
@@ -169,8 +172,8 @@ class ManagedCursorContainer {
     private void pushTowardTail(Node node) {
         while (node.next != null) {
             // While this node is "bigger" than its previous, swap the two.
-            long current = ((PositionImpl) node.data.getMarkDeletedPosition()).getLedgerId();
-            long next = ((PositionImpl) node.next.data.getMarkDeletedPosition()).getLedgerId();
+            long current = node.position.getLedgerId();
+            long next = node.next.position.getLedgerId();
             if (current > next) {
                 // Swap the 2 entries
 
@@ -220,7 +223,7 @@ class ManagedCursorContainer {
         while (node != null) {
             if (node != head)
                 sb.append(", ");
-            sb.append(node.data);
+            sb.append(node.cursor);
             node = node.next;
         }
 
@@ -233,7 +236,7 @@ class ManagedCursorContainer {
 
         Node node = head;
         while (node != null) {
-            cursors.add(node.data);
+            cursors.add(node.cursor);
             node = node.next;
         }
 
