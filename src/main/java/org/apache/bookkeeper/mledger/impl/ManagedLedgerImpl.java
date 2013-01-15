@@ -540,33 +540,39 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     }
 
     @Override
-    public synchronized void close() throws InterruptedException, ManagedLedgerException {
-        checkFenced();
+    public void close() throws InterruptedException, ManagedLedgerException {
+        Iterable<ManagedCursor> cursorsToClose;
+        synchronized (this) {
+            checkFenced();
 
-        log.info("[{}] Closing managed ledger", name);
+            log.info("[{}] Closing managed ledger", name);
 
-        try {
-            if (currentLedger != null) {
-                log.debug("[{}] Closing current writing ledger {}", name, currentLedger.getId());
-                currentLedger.close();
+            try {
+                if (currentLedger != null) {
+                    log.debug("[{}] Closing current writing ledger {}", name, currentLedger.getId());
+                    currentLedger.close();
+                }
+
+                for (LedgerHandle ledger : ledgerCache.asMap().values()) {
+                    log.debug("[{}] Closing ledger: {}", name, ledger.getId());
+                    ledger.close();
+                }
+
+                cursorsToClose = cursors.toList();
+
+            } catch (BKException e) {
+                throw new ManagedLedgerException(e);
             }
 
-            for (LedgerHandle ledger : ledgerCache.asMap().values()) {
-                log.debug("[{}] Closing ledger: {}", name, ledger.getId());
-                ledger.close();
-            }
-
-            for (ManagedCursor cursor : cursors.toList()) {
-                cursor.close();
-            }
-        } catch (BKException e) {
-            throw new ManagedLedgerException(e);
+            ledgerCache.invalidateAll();
+            log.debug("[{}] Invalidated {} ledgers in cache", name, ledgerCache.size());
+            factory.close(this);
+            state = State.Closed;
         }
 
-        ledgerCache.invalidateAll();
-        log.debug("[{}] Invalidated {} ledgers in cache", name, ledgerCache.size());
-        factory.close(this);
-        state = State.Closed;
+        for (ManagedCursor cursor : cursorsToClose) {
+            cursor.close();
+        }
     }
 
     @Override
