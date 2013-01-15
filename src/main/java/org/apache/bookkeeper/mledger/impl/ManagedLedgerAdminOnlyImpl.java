@@ -4,7 +4,6 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.AddEntryCallback;
-import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteCursorCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.OpenCursorCallback;
 import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
@@ -42,16 +41,6 @@ public class ManagedLedgerAdminOnlyImpl extends ManagedLedgerImpl {
     @Override
     public synchronized void asyncOpenCursor(String cursorName, OpenCursorCallback callback, Object ctx) {
         callback.openCursorFailed(exception(), ctx);
-    }
-
-    @Override
-    public void asyncDeleteCursor(String consumerName, DeleteCursorCallback callback, Object ctx) {
-        callback.deleteCursorFailed(exception(), ctx);
-    }
-
-    @Override
-    public void deleteCursor(String name) throws InterruptedException, ManagedLedgerException {
-        throw exception();
     }
 
 }

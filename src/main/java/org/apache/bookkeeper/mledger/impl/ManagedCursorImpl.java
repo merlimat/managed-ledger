@@ -149,6 +149,7 @@ class ManagedCursorImpl implements ManagedCursor {
                         if (isReadOnly) {
                             setAcknowledgedPosition(position);
                             callback.operationComplete();
+                            cursorLedger.set(lh);
                         } else {
                             initialize(position, callback);
                             lh.asyncClose(new CloseCallback() {

@@ -467,6 +467,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     public synchronized void asyncDeleteCursor(final String consumerName, final DeleteCursorCallback callback,
             final Object ctx) {
         final ManagedCursorImpl cursor = (ManagedCursorImpl) cursors.get(consumerName);
+        if (cursor == null) {
+            callback.deleteCursorFailed(new ManagedLedgerException("ManagedCursor not found: " + consumerName), ctx);
+            return;
+        }
 
         cursor.asyncDelete(new VoidCallback() {
             public void operationComplete() {
