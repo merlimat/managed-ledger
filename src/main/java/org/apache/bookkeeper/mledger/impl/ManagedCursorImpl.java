@@ -23,6 +23,7 @@ import static org.apache.bookkeeper.mledger.util.VarArgs.va;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -74,6 +75,8 @@ class ManagedCursorImpl implements ManagedCursor {
     // This mutex is used to prevent mark-delete being run while we are
     // switching to a new ledger for cursor position
     private final CallbackMutexReadWrite ledgerMutex = new CallbackMutexReadWrite();
+
+    private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     public interface VoidCallback {
         public void operationComplete();
@@ -215,6 +218,10 @@ class ManagedCursorImpl implements ManagedCursor {
     @Override
     public void asyncReadEntries(final int numberOfEntriesToRead, final ReadEntriesCallback callback, final Object ctx) {
         checkArgument(numberOfEntriesToRead > 0);
+        if (isClosed.get()) {
+            callback.readEntriesFailed(new ManagedLedgerException("Cursor was already closed"), ctx);
+            return;
+        }
 
         OpReadEntry op = new OpReadEntry(this, readPosition.get(), numberOfEntriesToRead, callback, ctx);
         ledger.asyncReadEntries(op);
@@ -284,6 +291,12 @@ class ManagedCursorImpl implements ManagedCursor {
     public void asyncMarkDelete(final Position position, final MarkDeleteCallback callback, final Object ctx) {
         checkNotNull(position);
         checkArgument(position instanceof PositionImpl);
+
+        if (isClosed.get()) {
+            callback.markDeleteFailed(new ManagedLedgerException("Cursor was already closed"), ctx);
+            return;
+        }
+
         ledgerMutex.lockRead();
 
         log.debug("[{}] Mark delete cursor {} up to position: {}", va(ledger.getName(), name, position));
@@ -346,7 +359,23 @@ class ManagedCursorImpl implements ManagedCursor {
 
     @Override
     public void close() throws InterruptedException, ManagedLedgerException {
-        // Nothing to release in this implementation
+        if (!isClosed.compareAndSet(false, true)) {
+            // Already closed
+            return;
+        }
+
+        ledgerMutex.lockWrite();
+        LedgerHandle lh = cursorLedger.get();
+
+        try {
+            if (lh != null) {
+                lh.close();
+            }
+        } catch (BKException e) {
+            throw new ManagedLedgerException(e);
+        } finally {
+            ledgerMutex.unlockWrite();
+        }
     }
 
     /**
@@ -512,7 +541,23 @@ class ManagedCursorImpl implements ManagedCursor {
                 }, null);
             }
         }, null);
+    }
 
+    void asyncDelete(final VoidCallback callback) {
+        isClosed.set(true);
+        ledgerMutex.lockWrite();
+
+        bookkeeper.asyncDeleteLedger(cursorLedger.get().getId(), new DeleteCallback() {
+            public void deleteComplete(int rc, Object ctx) {
+                ledgerMutex.unlockWrite();
+
+                if (rc == BKException.Code.OK) {
+                    callback.operationComplete();
+                } else {
+                    callback.operationFailed(new ManagedLedgerException(BKException.create(rc)));
+                }
+            }
+        }, null);
     }
 
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorImpl.class);

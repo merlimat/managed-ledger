@@ -464,21 +464,32 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     }
 
     @Override
-    public void asyncDeleteCursor(final String consumerName, final DeleteCursorCallback callback, final Object ctx) {
-        store.asyncRemoveConsumer(this.name, consumerName, new MetaStoreCallback<Void>() {
-            public void operationComplete(Void result, Version version) {
+    public synchronized void asyncDeleteCursor(final String consumerName, final DeleteCursorCallback callback,
+            final Object ctx) {
+        final ManagedCursorImpl cursor = (ManagedCursorImpl) cursors.get(consumerName);
+
+        cursor.asyncDelete(new VoidCallback() {
+            public void operationComplete() {
                 synchronized (ManagedLedgerImpl.this) {
                     cursors.removeCursor(consumerName);
                 }
 
-                trimConsumedLedgersInBackground();
-                callback.deleteCursorComplete(ctx);
+                store.asyncRemoveConsumer(ManagedLedgerImpl.this.name, consumerName, new MetaStoreCallback<Void>() {
+                    public void operationComplete(Void result, Version version) {
+                        trimConsumedLedgersInBackground();
+                        callback.deleteCursorComplete(ctx);
+                    }
+
+                    public void operationFailed(MetaStoreException e) {
+                        callback.deleteCursorFailed(e, ctx);
+                    }
+
+                });
             }
 
-            public void operationFailed(MetaStoreException e) {
-                callback.deleteCursorFailed(e, ctx);
+            public void operationFailed(ManagedLedgerException exception) {
+                callback.deleteCursorFailed(exception, ctx);
             }
-
         });
     }
 
@@ -528,17 +539,28 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     public synchronized void close() throws InterruptedException, ManagedLedgerException {
         checkFenced();
 
-        for (LedgerHandle ledger : ledgerCache.asMap().values()) {
-            log.debug("Closing ledger: {}", ledger.getId());
-            try {
-                ledger.close();
-            } catch (BKException e) {
-                throw new ManagedLedgerException(e);
+        log.info("[{}] Closing managed ledger", name);
+
+        try {
+            if (currentLedger != null) {
+                log.debug("[{}] Closing current writing ledger {}", name, currentLedger.getId());
+                currentLedger.close();
             }
+
+            for (LedgerHandle ledger : ledgerCache.asMap().values()) {
+                log.debug("[{}] Closing ledger: {}", name, ledger.getId());
+                ledger.close();
+            }
+
+            for (ManagedCursor cursor : cursors.toList()) {
+                cursor.close();
+            }
+        } catch (BKException e) {
+            throw new ManagedLedgerException(e);
         }
 
         ledgerCache.invalidateAll();
-        log.info("Invalidated {} ledgers in cache", ledgerCache.size());
+        log.debug("[{}] Invalidated {} ledgers in cache", name, ledgerCache.size());
         factory.close(this);
         state = State.Closed;
     }
@@ -671,7 +693,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     }
 
     synchronized void asyncReadEntries(OpReadEntry opReadEntry) {
-        if (state == State.Fenced) {
+        if (state == State.Fenced || state == State.Closed) {
             opReadEntry.failed(new ManagedLedgerFencedException());
             return;
         }
@@ -941,9 +963,17 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     void delete() throws InterruptedException, ManagedLedgerException {
         close();
 
+        List<ManagedCursor> cursorList;
         synchronized (this) {
             checkFenced();
+            cursorList = Lists.newArrayList(cursors.toList());
+        }
 
+        for (ManagedCursor cursor : cursorList) {
+            this.deleteCursor(cursor.getName());
+        }
+
+        synchronized (this) {
             try {
                 for (LedgerInfo ls : ledgers.values()) {
                     log.debug("[{}] Deleting ledger {}", name, ls);
