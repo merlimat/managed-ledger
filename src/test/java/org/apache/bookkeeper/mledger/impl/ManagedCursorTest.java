@@ -20,9 +20,9 @@ import static org.testng.Assert.fail;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.bookkeeper.mledger.AsyncCallbacks.AddEntryCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 import org.apache.bookkeeper.mledger.Entry;
@@ -472,49 +472,49 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
     }
 
     @Test(timeOut = 20000)
-    void cursorPersistenceAsyncMarkDelete() throws Exception {
+    public void asyncMarkDeleteBlocking() throws Exception {
         ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
-        ManagedLedger ledger = factory.open("my_test_ledger",
-                new ManagedLedgerConfig().setMetadataMaxEntriesPerLedger(1));
+
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setMaxEntriesPerLedger(10);
+        config.setMetadataMaxEntriesPerLedger(5);
+        ManagedLedger ledger = factory.open("my_test_ledger", config);
         final ManagedCursor c1 = ledger.openCursor("c1");
+        final AtomicReference<Position> lastPosition = new AtomicReference<Position>();
 
-        final int N = 1000;
-        List<Position> positions = Lists.newArrayList();
-        for (int i = 0; i < N; i++) {
-            Position p = ledger.addEntry("dummy-entry".getBytes(Encoding));
-            positions.add(p);
-        }
-
-        Position lastPosition = positions.get(N - 1);
-
-        final Executor executor = Executors.newFixedThreadPool(5);
-
+        final int N = 100;
         final CountDownLatch latch = new CountDownLatch(N);
-        for (final Position p : positions) {
-            executor.execute(new Runnable() {
-                public void run() {
-                    c1.asyncMarkDelete(p, new MarkDeleteCallback() {
-                        public void markDeleteComplete(Object ctx) {
-                            latch.countDown();
+        for (int i = 0; i < N; i++) {
+            ledger.asyncAddEntry("entry".getBytes(Encoding), new AddEntryCallback() {
+                public void addFailed(ManagedLedgerException exception, Object ctx) {
+                }
+
+                public void addComplete(Position position, Object ctx) {
+                    lastPosition.set(position);
+                    c1.asyncMarkDelete(position, new MarkDeleteCallback() {
+                        public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
                         }
 
-                        public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
-                            log.error("Failed to markdelete", exception);
+                        public void markDeleteComplete(Object ctx) {
                             latch.countDown();
                         }
                     }, null);
                 }
-            });
+            }, null);
         }
 
         latch.await();
+
+        assertEquals(c1.getNumberOfEntries(), 0);
 
         // Reopen
         factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
         ledger = factory.open("my_test_ledger");
         ManagedCursor c2 = ledger.openCursor("c1");
 
-        assertEquals(c2.getMarkDeletedPosition(), lastPosition);
+        assertEquals(c2.getMarkDeletedPosition(), lastPosition.get());
+
+        factory.shutdown();
     }
 
     @Test(timeOut = 20000)
@@ -555,6 +555,61 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         ManagedCursor c2 = ledger.openCursor("c1");
 
         assertEquals(c2.getMarkDeletedPosition(), lastPosition);
+    }
+
+    @Test
+    void unorderedMarkDelete() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        final ManagedCursor c1 = ledger.openCursor("c1");
+
+        Position p1 = ledger.addEntry("entry-1".getBytes(Encoding));
+        Position p2 = ledger.addEntry("entry-2".getBytes(Encoding));
+
+        c1.markDelete(p2);
+        try {
+            c1.markDelete(p1);
+            fail("Should have thrown exception");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        assertEquals(c1.getMarkDeletedPosition(), p2);
+    }
+
+    @Test
+    void unorderedAsyncMarkDelete() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        final ManagedCursor c1 = ledger.openCursor("c1");
+
+        Position p1 = ledger.addEntry("entry-1".getBytes(Encoding));
+        Position p2 = ledger.addEntry("entry-2".getBytes(Encoding));
+
+        final CountDownLatch latch = new CountDownLatch(2);
+        c1.asyncMarkDelete(p2, new MarkDeleteCallback() {
+            public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
+                fail();
+            }
+
+            public void markDeleteComplete(Object ctx) {
+                latch.countDown();
+            }
+        }, null);
+
+        c1.asyncMarkDelete(p1, new MarkDeleteCallback() {
+            public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
+                latch.countDown();
+            }
+
+            public void markDeleteComplete(Object ctx) {
+                fail();
+            }
+        }, null);
+
+        latch.await();
+
+        assertEquals(c1.getMarkDeletedPosition(), p2);
     }
 
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorTest.class);

@@ -9,14 +9,16 @@ import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.Position;
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 
 /**
  * Read only implementation of ManagedLedger
  */
 public class ManagedLedgerAdminOnlyImpl extends ManagedLedgerImpl {
     public ManagedLedgerAdminOnlyImpl(ManagedLedgerFactoryImpl factory, BookKeeper bookKeeper, MetaStore store,
-            ManagedLedgerConfig config, ScheduledExecutorService executor, String name) {
-        super(factory, bookKeeper, store, config, executor, name);
+            ManagedLedgerConfig config, ScheduledExecutorService executor, OrderedSafeExecutor orderedExecutor,
+            String name) {
+        super(factory, bookKeeper, store, config, executor, orderedExecutor, name);
     }
 
     private ManagedLedgerException exception() {

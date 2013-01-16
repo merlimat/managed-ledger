@@ -30,6 +30,7 @@ import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl.ManagedLedgerInitializeLedgerCallback;
 import org.apache.bookkeeper.mledger.impl.MetaStore.OpenMode;
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
@@ -47,6 +48,7 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
     private final ZooKeeper zookeeper;
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(5, new ThreadFactoryBuilder()
             .setNameFormat("bookkeeper-ml-%s").build());
+    private final OrderedSafeExecutor orderedExecutor = new OrderedSafeExecutor(5);
 
     private final ConcurrentMap<String, ManagedLedgerImpl> ledgers = Maps.newConcurrentMap();
 
@@ -131,7 +133,8 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
             log.info("Reusing opened ManagedLedger: {}", name);
             callback.openLedgerComplete(ledger, ctx);
         } else {
-            final ManagedLedgerImpl newledger = new ManagedLedgerImpl(this, bookKeeper, store, config, executor, name);
+            final ManagedLedgerImpl newledger = new ManagedLedgerImpl(this, bookKeeper, store, config, executor,
+                    orderedExecutor, name);
             newledger.initialize(OpenMode.CreateIfNotFound, new ManagedLedgerInitializeLedgerCallback() {
                 public void initializeComplete() {
                     ManagedLedgerImpl oldValue = ledgers.putIfAbsent(name, newledger);
@@ -197,7 +200,7 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
     public void asyncOpenReadOnly(final String name, final ManagedLedgerConfig config,
             final OpenLedgerCallback callback, final Object ctx) {
         final ManagedLedgerAdminOnlyImpl ledger = new ManagedLedgerAdminOnlyImpl(this, bookKeeper, store, config,
-                executor, name);
+                executor, orderedExecutor, name);
         ledger.initialize(OpenMode.AdminObserver, new ManagedLedgerInitializeLedgerCallback() {
             public void initializeComplete() {
                 callback.openLedgerComplete(ledger, ctx);

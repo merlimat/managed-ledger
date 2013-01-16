@@ -56,6 +56,7 @@ import org.apache.bookkeeper.mledger.impl.MetaStore.Version;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.ManagedLedgerInfo;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.ManagedLedgerInfo.LedgerInfo;
 import org.apache.bookkeeper.mledger.util.CallbackMutex;
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,6 +113,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     private State state;
 
     private final ScheduledExecutorService executor;
+    private final OrderedSafeExecutor orderedExecutor;
     private final ManagedLedgerFactoryImpl factory;
 
     /**
@@ -123,13 +125,15 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     // //////////////////////////////////////////////////////////////////////
 
     public ManagedLedgerImpl(ManagedLedgerFactoryImpl factory, BookKeeper bookKeeper, MetaStore store,
-            ManagedLedgerConfig config, ScheduledExecutorService executor, final String name) {
+            ManagedLedgerConfig config, ScheduledExecutorService executor, OrderedSafeExecutor orderedExecutor,
+            final String name) {
         this.factory = factory;
         this.bookKeeper = bookKeeper;
         this.config = config;
         this.store = store;
         this.name = name;
         this.executor = executor;
+        this.orderedExecutor = orderedExecutor;
         this.currentLedger = null;
         this.state = State.None;
         this.ledgersVersion = null;
@@ -1086,6 +1090,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
     Executor getExecutor() {
         return executor;
+    }
+
+    OrderedSafeExecutor getOrderedExecutor() {
+        return orderedExecutor;
     }
 
     /**

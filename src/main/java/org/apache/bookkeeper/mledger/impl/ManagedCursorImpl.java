@@ -51,6 +51,7 @@ import org.apache.bookkeeper.mledger.impl.MetaStore.Version;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.ManagedCursorInfo;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.PositionInfo;
 import org.apache.bookkeeper.mledger.util.CallbackMutexReadWrite;
+import org.apache.bookkeeper.util.SafeRunnable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -274,7 +275,13 @@ class ManagedCursorImpl implements ManagedCursor {
      * @return the previous acknowledged position
      */
     PositionImpl setAcknowledgedPosition(PositionImpl newPosition) {
-        PositionImpl oldPosition = acknowledgedPosition.getAndSet(newPosition);
+        PositionImpl oldPosition = null;
+        do {
+            oldPosition = acknowledgedPosition.get();
+            if (oldPosition != null && newPosition.compareTo(oldPosition) < 0) {
+                throw new IllegalArgumentException("Mark deleting an already mark-deleted position");
+            }
+        } while (!acknowledgedPosition.compareAndSet(oldPosition, newPosition));
 
         PositionImpl currentRead = readPosition.get();
         if (currentRead == null || newPosition.compareTo(currentRead) >= 0) {
@@ -298,24 +305,40 @@ class ManagedCursorImpl implements ManagedCursor {
             return;
         }
 
-        ledgerMutex.lockRead();
+        // Do the asyncMarkDelete in a background thread to avoid holding the current thread when ledgerMutex.lockRead()
+        // becomes blocking.
+        ledger.getOrderedExecutor().submitOrdered(ledger.getName(), new SafeRunnable() {
+            public void safeRun() {
+                ledgerMutex.lockRead();
 
-        log.debug("[{}] Mark delete cursor {} up to position: {}", va(ledger.getName(), name, position));
-        final PositionImpl newPosition = (PositionImpl) position;
-        final PositionImpl oldPosition = setAcknowledgedPosition(newPosition);
-        persistPosition(cursorLedger.get(), newPosition, new VoidCallback() {
-            public void operationComplete() {
-                log.debug("[{}] Mark delete cursor {} to position {} succeeded", va(ledger.getName(), name, position));
-                ledgerMutex.unlockRead();
-                ledger.updateCursor(ManagedCursorImpl.this, oldPosition, (PositionImpl) position);
-                callback.markDeleteComplete(ctx);
-            }
+                log.debug("[{}] Mark delete cursor {} up to position: {}", va(ledger.getName(), name, position));
+                final PositionImpl newPosition = (PositionImpl) position;
+                PositionImpl oldPosition;
+                try {
+                    oldPosition = setAcknowledgedPosition(newPosition);
+                } catch (IllegalArgumentException e) {
+                    callback.markDeleteFailed(new ManagedLedgerException(e), ctx);
+                    return;
+                }
 
-            public void operationFailed(ManagedLedgerException exception) {
-                log.warn("[{}] Failed to mark delete position for cursor={} ledger={} position={}",
-                        va(ledger.getName(), ManagedCursorImpl.this, position));
-                ledgerMutex.unlockRead();
-                callback.markDeleteFailed(exception, ctx);
+                final PositionImpl oldPositionFinal = oldPosition;
+
+                persistPosition(cursorLedger.get(), newPosition, new VoidCallback() {
+                    public void operationComplete() {
+                        log.debug("[{}] Mark delete cursor {} to position {} succeeded",
+                                va(ledger.getName(), name, position));
+                        ledgerMutex.unlockRead();
+                        ledger.updateCursor(ManagedCursorImpl.this, oldPositionFinal, (PositionImpl) position);
+                        callback.markDeleteComplete(ctx);
+                    }
+
+                    public void operationFailed(ManagedLedgerException exception) {
+                        log.warn("[{}] Failed to mark delete position for cursor={} ledger={} position={}",
+                                va(ledger.getName(), ManagedCursorImpl.this, position));
+                        ledgerMutex.unlockRead();
+                        callback.markDeleteFailed(exception, ctx);
+                    }
+                });
             }
         });
     }
