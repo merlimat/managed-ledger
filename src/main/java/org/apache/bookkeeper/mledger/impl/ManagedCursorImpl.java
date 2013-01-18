@@ -317,6 +317,7 @@ class ManagedCursorImpl implements ManagedCursor {
                 try {
                     oldPosition = setAcknowledgedPosition(newPosition);
                 } catch (IllegalArgumentException e) {
+                    ledgerMutex.unlockRead();
                     callback.markDeleteFailed(new ManagedLedgerException(e), ctx);
                     return;
                 }
