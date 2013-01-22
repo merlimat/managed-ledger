@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.bookkeeper.mledger.AsyncCallbacks.AddEntryCallback;
@@ -970,6 +971,8 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
             factory.delete("my_test_ledger");
             fail("should have failed");
         } catch (ManagedLedgerException e) {
+            // ok
+        } catch (RejectedExecutionException e) {
             // ok
         }
     }
