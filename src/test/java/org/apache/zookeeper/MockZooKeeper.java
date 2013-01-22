@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -37,7 +37,7 @@ public class MockZooKeeper extends ZooKeeper {
     private SetMultimap<String, Watcher> watchers;
     private AtomicBoolean stopped;
 
-    private Executor executor;
+    private ExecutorService executor;
 
     public static MockZooKeeper newInstance() {
         try {
@@ -344,6 +344,7 @@ public class MockZooKeeper extends ZooKeeper {
         stopped.set(true);
         tree.clear();
         watchers.clear();
+        executor.shutdownNow();
     }
 
     private static final Logger log = LoggerFactory.getLogger(MockZooKeeper.class);
