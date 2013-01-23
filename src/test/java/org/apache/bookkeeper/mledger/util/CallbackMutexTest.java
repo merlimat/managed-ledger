@@ -1,13 +1,23 @@
 package org.apache.bookkeeper.mledger.util;
 
-import org.testng.Assert;
-import org.testng.annotations.Test;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 public class CallbackMutexTest {
 
     public final int numberOfThreads = 1000;
     public int counter = 0;
+
+    @BeforeClass
+    public void setup() {
+        Logger log = Logger.getLogger(CallbackMutex.class);
+        log.setLevel(Level.DEBUG);
+    }
 
     @Test
     public void lock() {

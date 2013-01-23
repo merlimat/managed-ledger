@@ -36,9 +36,9 @@ import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
-import org.testng.collections.Lists;
 
 import com.google.common.base.Charsets;
+import com.google.common.collect.Lists;
 
 public class ManagedCursorTest extends BookKeeperClusterTestCase {
 
@@ -610,6 +610,131 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         latch.await();
 
         assertEquals(c1.getMarkDeletedPosition(), p2);
+    }
+
+    @Test
+    void deleteCursor() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ManagedCursor c1 = ledger.openCursor("c1");
+
+        ledger.addEntry("entry-1".getBytes(Encoding));
+        Position p2 = ledger.addEntry("entry-2".getBytes(Encoding));
+
+        assertEquals(c1.getNumberOfEntries(), 2);
+
+        // Remove and recreate the same cursor
+        ledger.deleteCursor("c1");
+
+        try {
+            c1.readEntries(10);
+            fail("must fail, the cursor should be closed");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        try {
+            c1.markDelete(p2);
+            fail("must fail, the cursor should be closed");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        c1 = ledger.openCursor("c1");
+        assertEquals(c1.getNumberOfEntries(), 0);
+
+        c1.close();
+        try {
+            c1.readEntries(10);
+            fail("must fail, the cursor should be closed");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        c1.close();
+    }
+
+    @Test(timeOut = 20000)
+    void readOnlyCursor() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ManagedCursor c1 = ledger.openCursor("c1");
+        Position p1 = ledger.addEntry("entry-1".getBytes(Encoding));
+
+        ledger.close();
+
+        try {
+            c1.readEntries(10);
+            fail("must fail, the cursor should be closed");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        try {
+            factory.openReadOnly("non_existing_ledger");
+            fail("The managed ledger doesn't exist");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        // Re-open in read only mode
+        ledger = factory.openReadOnly("my_test_ledger");
+        List<ManagedCursor> cursors = Lists.newArrayList(ledger.getCursors());
+        assertEquals(cursors.size(), 1);
+        c1 = cursors.get(0);
+        assertEquals(c1.getNumberOfEntries(), 1);
+
+        try {
+            c1.readEntries(1);
+            fail("read-only mode");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        try {
+            c1.markDelete(p1);
+            fail("read-only mode");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        try {
+            c1.skip(1);
+            fail("read-only mode");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        try {
+            c1.seek(p1);
+            fail("read-only mode");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        final CountDownLatch latch = new CountDownLatch(2);
+
+        c1.asyncMarkDelete(p1, new MarkDeleteCallback() {
+            public void markDeleteComplete(Object ctx) {
+                fail("operation should not succeed");
+            }
+
+            public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
+                latch.countDown();
+            }
+        }, null);
+
+        c1.asyncReadEntries(10, new ReadEntriesCallback() {
+            public void readEntriesComplete(List<Entry> entries, Object ctx) {
+                fail("operation should not succeed");
+            }
+
+            public void readEntriesFailed(ManagedLedgerException exception, Object ctx) {
+                latch.countDown();
+            }
+        }, null);
+
+        latch.await();
     }
 
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorTest.class);

@@ -266,9 +266,5 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
         return store;
     }
 
-    public BookKeeper getBooKeeperClient() {
-        return bookKeeper;
-    }
-
     private static final Logger log = LoggerFactory.getLogger(ManagedLedgerFactoryImpl.class);
 }

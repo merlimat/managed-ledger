@@ -453,51 +453,45 @@ class ManagedCursorImpl implements ManagedCursor {
 
     void persistPosition(final LedgerHandle lh, final PositionImpl position, final VoidCallback callback) {
         PositionInfo pi = position.getPositionInfo();
-        try {
-            log.debug("[{}] Cursor {} Appending to ledger={} position={}",
-                    va(ledger.getName(), name, lh.getId(), position));
-            lh.asyncAddEntry(pi.toByteArray(), new AddCallback() {
-                public void addComplete(int rc, LedgerHandle lh, long entryId, Object ctx) {
-                    if (rc == BKException.Code.OK) {
-                        log.debug("[{}] Updated cursor {} position {} in meta-ledger {}",
-                                va(ledger.getName(), name, position, lh.getId()));
-                        callback.operationComplete();
+        log.debug("[{}] Cursor {} Appending to ledger={} position={}", va(ledger.getName(), name, lh.getId(), position));
+        lh.asyncAddEntry(pi.toByteArray(), new AddCallback() {
+            public void addComplete(int rc, LedgerHandle lh, long entryId, Object ctx) {
+                if (rc == BKException.Code.OK) {
+                    log.debug("[{}] Updated cursor {} position {} in meta-ledger {}",
+                            va(ledger.getName(), name, position, lh.getId()));
+                    callback.operationComplete();
 
-                        if (lh.getLastAddConfirmed() == config.getMetadataMaxEntriesPerLedger()) {
-                            log.debug("[{}] Need to create new metadata ledger for consumer {}", ledger.getName(), name);
+                    if (lh.getLastAddConfirmed() == config.getMetadataMaxEntriesPerLedger()) {
+                        log.debug("[{}] Need to create new metadata ledger for consumer {}", ledger.getName(), name);
 
-                            // Force to create a new ledger in a background thread
-                            ledger.getExecutor().execute(new Runnable() {
-                                public void run() {
-                                    ledgerMutex.lockWrite();
+                        // Force to create a new ledger in a background thread
+                        ledger.getExecutor().execute(new Runnable() {
+                            public void run() {
+                                ledgerMutex.lockWrite();
 
-                                    createNewMetadataLedger(new VoidCallback() {
-                                        public void operationComplete() {
-                                            log.debug("[{}] Created new metadata ledger for consumer {}",
-                                                    ledger.getName(), name);
-                                            ledgerMutex.unlockWrite();
-                                        }
+                                createNewMetadataLedger(new VoidCallback() {
+                                    public void operationComplete() {
+                                        log.debug("[{}] Created new metadata ledger for consumer {}", ledger.getName(),
+                                                name);
+                                        ledgerMutex.unlockWrite();
+                                    }
 
-                                        public void operationFailed(ManagedLedgerException exception) {
-                                            log.warn("[{}] Failed to create new metadata ledger for consumer {}: {}",
-                                                    va(ledger.getName(), name, exception));
-                                            ledgerMutex.unlockWrite();
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    } else {
-                        log.warn("[{}] Error updating cursor {} position {} in meta-ledger {}: ",
-                                va(ledger.getName(), name, position, lh.getId(), BKException.create(rc)));
-                        callback.operationFailed(new ManagedLedgerException(BKException.create(rc)));
+                                    public void operationFailed(ManagedLedgerException exception) {
+                                        log.warn("[{}] Failed to create new metadata ledger for consumer {}: {}",
+                                                va(ledger.getName(), name, exception));
+                                        ledgerMutex.unlockWrite();
+                                    }
+                                });
+                            }
+                        });
                     }
+                } else {
+                    log.warn("[{}] Error updating cursor {} position {} in meta-ledger {}: ",
+                            va(ledger.getName(), name, position, lh.getId(), BKException.create(rc)));
+                    callback.operationFailed(new ManagedLedgerException(BKException.create(rc)));
                 }
-            }, null);
-        } catch (RuntimeException e) {
-            log.error("Runtime exception", e);
-            callback.operationFailed(new ManagedLedgerException(e));
-        }
+            }
+        }, null);
     }
 
     void switchToNewLedger(final LedgerHandle lh, final VoidCallback callback) {
