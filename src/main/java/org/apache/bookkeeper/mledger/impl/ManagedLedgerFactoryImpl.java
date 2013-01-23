@@ -13,6 +13,8 @@
  */
 package org.apache.bookkeeper.mledger.impl;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -54,7 +56,7 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
 
     public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration) throws Exception {
         final CountDownLatch counter = new CountDownLatch(1);
-        final String zookeeperQuorum = bkClientConfiguration.getZkServers();
+        final String zookeeperQuorum = checkNotNull(bkClientConfiguration.getZkServers());
 
         zookeeper = new ZooKeeper(zookeeperQuorum, bkClientConfiguration.getZkTimeout(), new Watcher() {
             @Override
@@ -68,9 +70,8 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
             }
         });
 
-        counter.await(bkClientConfiguration.getZkTimeout(), TimeUnit.MILLISECONDS);
-
-        if (zookeeper.getState() != States.CONNECTED) {
+        if (!counter.await(bkClientConfiguration.getZkTimeout(), TimeUnit.MILLISECONDS)
+                || zookeeper.getState() != States.CONNECTED) {
             throw new ManagedLedgerException("Error connecting to ZooKeeper at '" + zookeeperQuorum + "'");
         }
 

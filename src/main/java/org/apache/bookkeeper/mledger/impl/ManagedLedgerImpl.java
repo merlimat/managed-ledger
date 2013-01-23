@@ -787,7 +787,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             nextReadPosition = new PositionImpl(lh.getId(), lastEntry + 1);
         } else {
             // Move to next ledger
-            Long nextLedgerId = ledgers.ceilingKey(lh.getId() + 1);
+            Long nextLedgerId;
+            synchronized ( this) {
+                nextLedgerId = ledgers.ceilingKey(lh.getId() + 1);
+            }
+
             if (nextLedgerId == null) {
                 // We are already in the last ledger
                 nextReadPosition = new PositionImpl(lh.getId(), lastEntry + 1);

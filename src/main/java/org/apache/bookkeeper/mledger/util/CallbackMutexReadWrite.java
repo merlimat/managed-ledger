@@ -66,20 +66,22 @@ public class CallbackMutexReadWrite {
         writeThread = Thread.currentThread().getName();
         writeThreadPosition = Thread.currentThread().getStackTrace()[2].toString();
 
-        if (readers > 0) {
+        while (readers > 0) {
             // Wait until all the readers are done.
             log.debug("{} lockWrite wait for {} readers", hashCode(), readers);
             condition.awaitUninterruptibly();
         }
 
-        lock.unlock();
         log.debug("<<<<<<<<  {} lockWrite got lock at {}", hashCode(), writeThreadPosition);
+        lock.unlock();
     }
 
     public void unlockWrite() {
+        lock.lock();
         log.debug(">>>> {} unlockWrite that was locked by {}", hashCode(), writeThread);
         writeThread = null;
         writeThreadPosition = null;
+        lock.unlock();
         semaphore.release();
     }
 

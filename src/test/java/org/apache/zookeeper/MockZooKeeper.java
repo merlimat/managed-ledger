@@ -344,7 +344,6 @@ public class MockZooKeeper extends ZooKeeper {
         stopped.set(true);
         tree.clear();
         watchers.clear();
-        executor.shutdownNow();
     }
 
     private static final Logger log = LoggerFactory.getLogger(MockZooKeeper.class);
