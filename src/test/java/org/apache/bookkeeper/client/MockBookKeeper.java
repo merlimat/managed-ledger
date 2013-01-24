@@ -14,6 +14,7 @@
 package org.apache.bookkeeper.client;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -170,6 +171,10 @@ public class MockBookKeeper extends BookKeeper {
 
     public boolean isStopped() {
         return stopped.get();
+    }
+
+    public Set<Long> getLedgers() {
+        return ledgers.keySet();
     }
 
     private static final Logger log = LoggerFactory.getLogger(MockBookKeeper.class);

@@ -1154,4 +1154,42 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
         factory.delete("ledger2");
         assertEquals(Sets.newHashSet(store.getManagedLedgers()), Sets.newHashSet());
     }
+
+    @Test
+    public void testCleanup() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ledger.openCursor("c1");
+
+        ledger.addEntry("data".getBytes(Encoding));
+        ledger.close();
+        assertEquals(bkc.getLedgers().size(), 2);
+
+        factory.delete("my_test_ledger");
+        assertEquals(bkc.getLedgers().size(), 0);
+    }
+
+    @Test
+    public void testReopenAndCleanup() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ledger.openCursor("c1");
+
+        ledger.addEntry("data".getBytes(Encoding));
+        ledger.close();
+        assertEquals(bkc.getLedgers().size(), 2);
+
+        factory.shutdown();
+
+        factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ledger = factory.open("my_test_ledger");
+        ledger.openCursor("c1");
+
+        assertEquals(bkc.getLedgers().size(), 3);
+
+        factory.delete("my_test_ledger");
+        assertEquals(bkc.getLedgers().size(), 0);
+
+        factory.shutdown();
+    }
 }
