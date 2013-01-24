@@ -125,6 +125,7 @@ class ManagedCursorImpl implements ManagedCursor {
                 }
 
                 // Read the last entry in the ledger
+                cursorLedger.set(lh);
                 final long entryId = lh.getLastAddConfirmed();
                 lh.asyncReadEntries(entryId, entryId, new ReadCallback() {
                     public void readComplete(int rc, LedgerHandle lh, Enumeration<LedgerEntry> seq, Object ctx) {
