@@ -13,12 +13,14 @@
  */
 package org.apache.bookkeeper.client;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.bookkeeper.client.AsyncCallback.CreateCallback;
@@ -47,6 +49,8 @@ public class MockBookKeeper extends BookKeeper {
     Map<Long, MockLedgerHandle> ledgers = new ConcurrentHashMap<Long, MockLedgerHandle>();
     AtomicLong sequence = new AtomicLong(3);
     AtomicBoolean stopped = new AtomicBoolean(false);
+    AtomicInteger stepsToFail = new AtomicInteger(-1);
+    int failReturnCode = BKException.Code.OK;
 
     public MockBookKeeper(ClientConfiguration conf, ZooKeeper zk) throws Exception {
         super(conf, zk);
@@ -61,19 +65,24 @@ public class MockBookKeeper extends BookKeeper {
     }
 
     @Override
-    public void asyncCreateLedger(int ensSize, int writeQuorumSize, int ackQuorumSize, DigestType digestType,
-            byte[] passwd, final CreateCallback cb, final Object ctx) {
+    public void asyncCreateLedger(int ensSize, int writeQuorumSize, int ackQuorumSize, final DigestType digestType,
+            final byte[] passwd, final CreateCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
+                if (getProgrammedFailStatus()) {
+                    cb.createComplete(failReturnCode, null, ctx);
+                    return;
+                }
 
                 if (stopped.get()) {
                     cb.createComplete(BKException.Code.WriteException, null, ctx);
+                    return;
                 }
 
                 try {
                     long id = sequence.getAndIncrement();
                     log.info("Creating ledger {}", id);
-                    MockLedgerHandle lh = new MockLedgerHandle(MockBookKeeper.this, id);
+                    MockLedgerHandle lh = new MockLedgerHandle(MockBookKeeper.this, id, digestType, passwd);
                     ledgers.put(id, lh);
                     cb.createComplete(0, lh, ctx);
                 } catch (Throwable t) {
@@ -85,6 +94,8 @@ public class MockBookKeeper extends BookKeeper {
     @Override
     public LedgerHandle createLedger(int ensSize, int writeQuorumSize, int ackQuorumSize, DigestType digestType,
             byte[] passwd) throws BKException {
+        checkProgrammedFail();
+
         if (stopped.get()) {
             throw BKException.create(BKException.Code.WriteException);
         }
@@ -92,7 +103,7 @@ public class MockBookKeeper extends BookKeeper {
         try {
             long id = sequence.getAndIncrement();
             log.info("Creating ledger {}", id);
-            MockLedgerHandle lh = new MockLedgerHandle(this, id);
+            MockLedgerHandle lh = new MockLedgerHandle(this, id, digestType, passwd);
             ledgers.put(id, lh);
             return lh;
         } catch (Throwable t) {
@@ -109,31 +120,38 @@ public class MockBookKeeper extends BookKeeper {
 
     @Override
     public void asyncOpenLedger(long lId, DigestType digestType, byte[] passwd, OpenCallback cb, Object ctx) {
+        if (getProgrammedFailStatus()) {
+            cb.openComplete(failReturnCode, null, ctx);
+            return;
+        }
+
         if (stopped.get()) {
             cb.openComplete(BKException.Code.WriteException, null, ctx);
             return;
         }
 
-        LedgerHandle lh = ledgers.get(lId);
-        if (lh != null) {
-            cb.openComplete(0, lh, ctx);
-        } else {
+        MockLedgerHandle lh = ledgers.get(lId);
+        if (lh == null) {
             cb.openComplete(BKException.Code.NoSuchLedgerExistsException, null, ctx);
+        } else if (lh.digest != digestType) {
+            cb.openComplete(BKException.Code.DigestMatchException, null, ctx);
+        } else if (!Arrays.equals(lh.passwd, passwd)) {
+            cb.openComplete(BKException.Code.UnauthorizedAccessException, null, ctx);
+        } else {
+            cb.openComplete(0, lh, ctx);
         }
     }
 
     @Override
     public void asyncOpenLedgerNoRecovery(long lId, DigestType digestType, byte[] passwd, OpenCallback cb, Object ctx) {
-        if (stopped.get()) {
-            cb.openComplete(BKException.Code.WriteException, null, ctx);
-        } else {
-            asyncOpenLedger(lId, digestType, passwd, cb, ctx);
-        }
+        asyncOpenLedger(lId, digestType, passwd, cb, ctx);
     }
 
     @Override
     public void asyncDeleteLedger(long lId, DeleteCallback cb, Object ctx) {
-        if (stopped.get()) {
+        if (getProgrammedFailStatus()) {
+            cb.deleteComplete(failReturnCode, ctx);
+        } else if (stopped.get()) {
             cb.deleteComplete(BKException.Code.WriteException, ctx);
         } else if (ledgers.containsKey(lId)) {
             ledgers.remove(lId);
@@ -145,6 +163,8 @@ public class MockBookKeeper extends BookKeeper {
 
     @Override
     public void deleteLedger(long lId) throws InterruptedException, BKException {
+        checkProgrammedFail();
+
         if (stopped.get()) {
             throw BKException.create(BKException.Code.WriteException);
         }
@@ -158,6 +178,7 @@ public class MockBookKeeper extends BookKeeper {
 
     @Override
     public void close() throws InterruptedException, BKException {
+        checkProgrammedFail();
     }
 
     public void shutdown() {
@@ -175,6 +196,25 @@ public class MockBookKeeper extends BookKeeper {
 
     public Set<Long> getLedgers() {
         return ledgers.keySet();
+    }
+
+    void checkProgrammedFail() throws BKException {
+        if (stepsToFail.getAndDecrement() == 0) {
+            throw BKException.create(failReturnCode);
+        }
+    }
+
+    boolean getProgrammedFailStatus() {
+        return stepsToFail.getAndDecrement() == 0;
+    }
+
+    public void failNow(int rc) {
+        failAfter(0, rc);
+    }
+
+    public void failAfter(int steps, int rc) {
+        stepsToFail.set(steps);
+        failReturnCode = rc;
     }
 
     private static final Logger log = LoggerFactory.getLogger(MockBookKeeper.class);

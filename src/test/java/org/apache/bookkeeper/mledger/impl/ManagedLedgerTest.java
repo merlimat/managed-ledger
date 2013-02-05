@@ -1169,6 +1169,32 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
         assertEquals(bkc.getLedgers().size(), 0);
     }
 
+    @Test(timeOut = 20000)
+    public void testAsyncCleanup() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ledger.openCursor("c1");
+
+        ledger.addEntry("data".getBytes(Encoding));
+        ledger.close();
+        assertEquals(bkc.getLedgers().size(), 2);
+
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        factory.asyncDelete("my_test_ledger", new DeleteLedgerCallback() {
+            public void deleteLedgerFailed(ManagedLedgerException exception, Object ctx) {
+                fail("should have succeeded");
+            }
+
+            public void deleteLedgerComplete(Object ctx) {
+                latch.countDown();
+            }
+        }, null);
+
+        latch.await();
+        assertEquals(bkc.getLedgers().size(), 0);
+    }
+
     @Test
     public void testReopenAndCleanup() throws Exception {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
@@ -1191,5 +1217,35 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
         assertEquals(bkc.getLedgers().size(), 0);
 
         factory.shutdown();
+    }
+
+    @Test(timeOut = 20000)
+    public void doubleOpen() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        ManagedLedger ledger1 = factory.open("my_test_ledger");
+        ManagedLedger ledger2 = factory.open("my_test_ledger");
+
+        assertTrue(ledger1 == ledger2);
+    }
+
+    @Test(timeOut = 20000)
+    public void testAsyncOpenReadOnly() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        factory.asyncOpenReadOnly("my_test_ledger", new OpenLedgerCallback() {
+            public void openLedgerFailed(ManagedLedgerException exception, Object ctx) {
+                latch.countDown();
+            }
+
+            public void openLedgerComplete(ManagedLedger ledger, Object ctx) {
+                fail("should have failed");
+            }
+        }, null);
+
+        latch.await();
+        assertEquals(bkc.getLedgers().size(), 0);
     }
 }

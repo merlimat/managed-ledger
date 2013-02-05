@@ -14,6 +14,7 @@
 package org.apache.bookkeeper.mledger.impl;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static java.lang.Math.min;
 import static org.apache.bookkeeper.mledger.util.VarArgs.va;
 
@@ -145,8 +146,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 try {
                     ledger.close();
                 } catch (Exception e) {
-                    log.error("[{}] Error closing ledger {}", name, ledger.getId());
-                    log.error("Exception: ", e);
+                    log.error("[{}] Error closing ledger {}: {}", va(name, ledger.getId(), e));
                 }
             }
         };
@@ -476,28 +476,30 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             return;
         }
 
-        cursor.asyncDelete(new VoidCallback() {
-            public void operationComplete() {
-                synchronized (ManagedLedgerImpl.this) {
-                    cursors.removeCursor(consumerName);
-                }
+        // First remove the consumer form the MetaStore. If this operation succeeds and the next one (removing the
+        // ledger from BK) don't, we end up having a loose ledger leaked but the state will be consistent.
+        store.asyncRemoveConsumer(ManagedLedgerImpl.this.name, consumerName, new MetaStoreCallback<Void>() {
+            public void operationComplete(Void result, Version version) {
+                cursor.asyncDelete(new VoidCallback() {
+                    public void operationComplete() {
+                        synchronized (ManagedLedgerImpl.this) {
+                            cursors.removeCursor(consumerName);
+                        }
 
-                store.asyncRemoveConsumer(ManagedLedgerImpl.this.name, consumerName, new MetaStoreCallback<Void>() {
-                    public void operationComplete(Void result, Version version) {
                         trimConsumedLedgersInBackground();
                         callback.deleteCursorComplete(ctx);
                     }
 
-                    public void operationFailed(MetaStoreException e) {
-                        callback.deleteCursorFailed(e, ctx);
+                    public void operationFailed(ManagedLedgerException exception) {
+                        callback.deleteCursorFailed(exception, ctx);
                     }
-
                 });
             }
 
-            public void operationFailed(ManagedLedgerException exception) {
-                callback.deleteCursorFailed(exception, ctx);
+            public void operationFailed(MetaStoreException e) {
+                callback.deleteCursorFailed(e, ctx);
             }
+
         });
     }
 
@@ -587,7 +589,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     close();
                     callback.closeComplete(ctx);
                 } catch (Exception e) {
-                    log.warn("[{}] Got exception when closin managed ledger: {}", name, e);
+                    log.warn("[{}] Got exception when closing managed ledger: {}", name, e);
                     callback.closeFailed(new ManagedLedgerException(e), ctx);
                 }
             }
@@ -788,7 +790,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         } else {
             // Move to next ledger
             Long nextLedgerId;
-            synchronized ( this) {
+            synchronized (this) {
                 nextLedgerId = ledgers.ceilingKey(lh.getId() + 1);
             }
 
@@ -831,12 +833,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         } else {
             // At this point, currentLedger is empty, we need to check in the
             // older ledgers for entries past the current position
-            LedgerInfo ls = ledgers.get(position.getLedgerId());
-            if (ls == null) {
-                // The cursor haven't been initialized yet
-                checkArgument(position.getLedgerId() == -1);
-                return true;
-            } else if (position.getEntryId() < ls.getEntries()) {
+            LedgerInfo ls = checkNotNull(ledgers.get(position.getLedgerId()));
+            if (position.getEntryId() < ls.getEntries()) {
                 // There are still entries to read in the current reading ledger
                 return true;
             } else {
@@ -890,8 +888,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 // include lastLedger in the trimming.
                 slowestReaderLedgerId = currentLedger.getId() + 1;
             } else {
-                PositionImpl slowestReaderPosition = cursors.getSlowestReaderPosition();
-                assert slowestReaderPosition != null;
+                PositionImpl slowestReaderPosition = checkNotNull(cursors.getSlowestReaderPosition());
                 slowestReaderLedgerId = slowestReaderPosition.getLedgerId();
             }
 

@@ -17,7 +17,6 @@ import static org.apache.bookkeeper.mledger.util.VarArgs.va;
 
 import java.nio.charset.Charset;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 import org.apache.bookkeeper.mledger.ManagedLedgerException.BadVersionException;
 import org.apache.bookkeeper.mledger.ManagedLedgerException.MetaStoreException;
@@ -138,13 +137,13 @@ class MetaStoreImplZookeeper implements MetaStore {
         zk.getChildren(prefix + ledgerName, false, new Children2Callback() {
             public void processResult(int rc, String path, Object ctx, List<String> children, Stat stat) {
                 log.debug("getConsumers complete rc={} children={}", rc, children);
-                log.debug("version={}", stat.getVersion());
                 if (rc != KeeperException.Code.OK.intValue()) {
                     callback.operationFailed(new MetaStoreException(
                             KeeperException.create(KeeperException.Code.get(rc))));
                     return;
                 }
 
+                log.debug("version={}", stat.getVersion());
                 ZKVersion version = new ZKVersion(stat.getVersion());
                 callback.operationComplete(children, version);
             }
@@ -217,37 +216,6 @@ class MetaStoreImplZookeeper implements MetaStore {
     }
 
     @Override
-    public void removeConsumer(String ledgerName, String consumerName) throws MetaStoreException {
-        final CountDownLatch counter = new CountDownLatch(1);
-        class Result {
-            MetaStoreException exception = null;
-        }
-        final Result result = new Result();
-
-        asyncRemoveConsumer(ledgerName, consumerName, new MetaStoreCallback<Void>() {
-
-            public void operationFailed(MetaStoreException e) {
-                result.exception = e;
-                counter.countDown();
-            }
-
-            public void operationComplete(Void result, Version version) {
-                counter.countDown();
-            }
-        });
-
-        try {
-            counter.await();
-        } catch (Exception e1) {
-            throw new MetaStoreException(e1);
-        }
-
-        if (result.exception != null) {
-            throw result.exception;
-        }
-    }
-
-    @Override
     public void asyncRemoveConsumer(String ledgerName, String consumerName, final MetaStoreCallback<Void> callback) {
         log.info("[{}] Remove consumer={}", ledgerName, consumerName);
         zk.delete(prefix + ledgerName + "/" + consumerName, -1, new VoidCallback() {
@@ -265,11 +233,6 @@ class MetaStoreImplZookeeper implements MetaStore {
     @Override
     public void removeManagedLedger(String ledgerName) throws MetaStoreException {
         try {
-            // First remove all the consumers
-            for (String consumer : zk.getChildren(prefix + ledgerName, false)) {
-                removeConsumer(ledgerName, consumer);
-            }
-
             log.info("[{}] Remove ManagedLedger", ledgerName);
             zk.delete(prefix + ledgerName, -1);
         } catch (Exception e) {

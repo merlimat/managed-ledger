@@ -113,17 +113,6 @@ public interface MetaStore {
      *            the name of the ManagedLedger
      * @param consumerName
      *            the consumer name
-     * @throws MetaStoreException
-     */
-    void removeConsumer(String ledgerName, String consumerName) throws MetaStoreException;
-
-    /**
-     * Drop the persistent state of a consumer from the metadata store
-     * 
-     * @param ledgerName
-     *            the name of the ManagedLedger
-     * @param consumerName
-     *            the consumer name
      * @param callback
      *            callback object
      */

@@ -9,6 +9,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.zookeeper.AsyncCallback.Children2Callback;
 import org.apache.zookeeper.AsyncCallback.ChildrenCallback;
@@ -39,6 +40,9 @@ public class MockZooKeeper extends ZooKeeper {
 
     private ExecutorService executor;
 
+    private AtomicInteger stepsToFail;
+    private KeeperException.Code failReturnCode;
+
     public static MockZooKeeper newInstance() {
         try {
             ReflectionFactory rf = ReflectionFactory.getReflectionFactory();
@@ -60,6 +64,8 @@ public class MockZooKeeper extends ZooKeeper {
         SetMultimap<String, Watcher> w = HashMultimap.create();
         watchers = Multimaps.synchronizedSetMultimap(w);
         stopped = new AtomicBoolean(false);
+        stepsToFail = new AtomicInteger(-1);
+        failReturnCode = KeeperException.Code.OK;
     }
 
     private MockZooKeeper(String quorum) throws Exception {
@@ -80,6 +86,8 @@ public class MockZooKeeper extends ZooKeeper {
     @Override
     public String create(String path, byte[] data, List<ACL> acl, CreateMode createMode) throws KeeperException,
             InterruptedException {
+        checkProgrammedFail();
+
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
 
@@ -95,7 +103,9 @@ public class MockZooKeeper extends ZooKeeper {
             final StringCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
-                if (stopped.get()) {
+                if (getProgrammedFailStatus()) {
+                    cb.processResult(failReturnCode.intValue(), path, ctx, null);
+                } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx, null);
                 } else if (tree.containsKey(path)) {
                     cb.processResult(KeeperException.Code.NODEEXISTS.intValue(), path, ctx, null);
@@ -109,6 +119,8 @@ public class MockZooKeeper extends ZooKeeper {
 
     @Override
     public byte[] getData(String path, Watcher watcher, Stat stat) throws KeeperException {
+        checkProgrammedFail();
+
         String value = tree.get(path);
         if (value == null) {
             throw new KeeperException.NoNodeException(path);
@@ -123,7 +135,10 @@ public class MockZooKeeper extends ZooKeeper {
     public void getData(final String path, boolean watch, final DataCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
-                if (stopped.get()) {
+                if (getProgrammedFailStatus()) {
+                    cb.processResult(failReturnCode.intValue(), path, ctx, null, null);
+                    return;
+                } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null, null);
                     return;
                 }
@@ -142,7 +157,10 @@ public class MockZooKeeper extends ZooKeeper {
     public void getData(final String path, final Watcher watcher, final DataCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
-                if (stopped.get()) {
+                if (getProgrammedFailStatus()) {
+                    cb.processResult(failReturnCode.intValue(), path, ctx, null, null);
+                    return;
+                } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx, null, null);
                     return;
                 }
@@ -164,7 +182,10 @@ public class MockZooKeeper extends ZooKeeper {
     public void getChildren(final String path, final Watcher watcher, final ChildrenCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
-                if (stopped.get()) {
+                if (getProgrammedFailStatus()) {
+                    cb.processResult(failReturnCode.intValue(), path, ctx, null);
+                    return;
+                } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null);
                     return;
                 }
@@ -190,6 +211,8 @@ public class MockZooKeeper extends ZooKeeper {
 
     @Override
     public List<String> getChildren(String path, boolean watch) throws KeeperException, InterruptedException {
+        checkProgrammedFail();
+
         if (stopped.get()) {
             throw new KeeperException.ConnectionLossException();
         }
@@ -216,7 +239,10 @@ public class MockZooKeeper extends ZooKeeper {
     public void getChildren(final String path, boolean watcher, final Children2Callback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
-                if (stopped.get()) {
+                if (getProgrammedFailStatus()) {
+                    cb.processResult(failReturnCode.intValue(), path, ctx, null, null);
+                    return;
+                } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null, null);
                     return;
                 }
@@ -246,6 +272,8 @@ public class MockZooKeeper extends ZooKeeper {
 
     @Override
     public Stat exists(String path, boolean watch) throws KeeperException, InterruptedException {
+        checkProgrammedFail();
+
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
 
@@ -258,6 +286,8 @@ public class MockZooKeeper extends ZooKeeper {
 
     @Override
     public Stat setData(String path, byte[] data, int version) throws KeeperException, InterruptedException {
+        checkProgrammedFail();
+
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
 
@@ -277,7 +307,10 @@ public class MockZooKeeper extends ZooKeeper {
     public void setData(final String path, final byte[] data, int version, final StatCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
-                if (stopped.get()) {
+                if (getProgrammedFailStatus()) {
+                    cb.processResult(failReturnCode.intValue(), path, ctx, null);
+                    return;
+                } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null);
                     return;
                 }
@@ -301,6 +334,8 @@ public class MockZooKeeper extends ZooKeeper {
 
     @Override
     public void delete(String path, int version) throws InterruptedException, KeeperException {
+        checkProgrammedFail();
+
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
         if (!tree.containsKey(path))
@@ -318,7 +353,9 @@ public class MockZooKeeper extends ZooKeeper {
     public void delete(final String path, int version, final VoidCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
-                if (stopped.get()) {
+                if (getProgrammedFailStatus()) {
+                    cb.processResult(failReturnCode.intValue(), path, ctx);
+                } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx);
                 } else if (!tree.containsKey(path)) {
                     cb.processResult(KeeperException.Code.NONODE.intValue(), path, ctx);
@@ -344,6 +381,25 @@ public class MockZooKeeper extends ZooKeeper {
         stopped.set(true);
         tree.clear();
         watchers.clear();
+    }
+
+    void checkProgrammedFail() throws KeeperException {
+        if (stepsToFail.getAndDecrement() == 0) {
+            throw KeeperException.create(failReturnCode);
+        }
+    }
+
+    boolean getProgrammedFailStatus() {
+        return stepsToFail.getAndDecrement() == 0;
+    }
+
+    public void failNow(KeeperException.Code rc) {
+        failAfter(0, rc);
+    }
+
+    public void failAfter(int steps, KeeperException.Code rc) {
+        stepsToFail.set(steps);
+        failReturnCode = rc;
     }
 
     private static final Logger log = LoggerFactory.getLogger(MockZooKeeper.class);

@@ -394,9 +394,7 @@ class ManagedCursorImpl implements ManagedCursor {
         LedgerHandle lh = cursorLedger.get();
 
         try {
-            if (lh != null) {
-                lh.close();
-            }
+            lh.close();
         } catch (BKException e) {
             throw new ManagedLedgerException(e);
         } finally {
