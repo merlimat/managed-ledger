@@ -94,6 +94,10 @@ public class ManagedCursorContainerTest {
         }
 
         @Override
+        public void rewind() throws ManagedLedgerException {
+        }
+
+        @Override
         public void skip(int messages) {
         }
 

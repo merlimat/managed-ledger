@@ -373,11 +373,17 @@ class ManagedCursorImpl implements ManagedCursor {
     }
 
     @Override
+    public void rewind() throws ManagedLedgerException {
+        PositionImpl markDeleted = acknowledgedPosition.get();
+        seek(new PositionImpl(markDeleted.getLedgerId(), markDeleted.getEntryId() + 1));
+    }
+
+    @Override
     public void seek(Position newReadPositionInt) throws ManagedLedgerException {
         checkArgument(newReadPositionInt instanceof PositionImpl);
         PositionImpl newReadPosition = (PositionImpl) newReadPositionInt;
         checkArgument(newReadPosition.compareTo(acknowledgedPosition.get()) > 0,
-                "new read position must be greater than or equal to the mark deleted position for this cursor");
+                "new read position must be greater than the mark deleted position for this cursor");
 
         checkArgument(ledger.isValidPosition(newReadPosition), "new read position is not valid for this managed ledger");
         readPosition.set(newReadPosition);

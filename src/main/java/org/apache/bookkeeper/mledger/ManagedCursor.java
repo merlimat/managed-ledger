@@ -119,6 +119,14 @@ public interface ManagedCursor {
     public Position getMarkDeletedPosition();
 
     /**
+     * Rewind the cursor to the mark deleted position to replay all the already read but not
+     * yet mark deleted messages.
+     *
+     * The next message to be read is the one after the current mark deleted message. 
+     */
+    public void rewind() throws ManagedLedgerException;
+
+    /**
      * Advance the read position by n entries.
      * 
      * The number of entries to be skipped must be less/equal than the total

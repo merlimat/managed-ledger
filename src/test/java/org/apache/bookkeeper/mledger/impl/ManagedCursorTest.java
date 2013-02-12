@@ -378,6 +378,8 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         ledger.addEntry("dummy-entry-6".getBytes(Encoding));
 
         cursor.seek(new PositionImpl(seekPosition.getLedgerId(), seekPosition.getEntryId()));
+
+        assertEquals(cursor.getReadPosition(), seekPosition);
     }
 
     @Test
@@ -419,6 +421,64 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         } catch (IllegalArgumentException e) {
             // Ok
         }
+    }
+
+    @Test(timeOut = 20000)
+    void seekPosition4() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ManagedCursor cursor = ledger.openCursor("c1");
+        Position p1 = ledger.addEntry("dummy-entry-1".getBytes(Encoding));
+        ledger.addEntry("dummy-entry-2".getBytes(Encoding));
+        ledger.addEntry("dummy-entry-3".getBytes(Encoding));
+        ledger.addEntry("dummy-entry-4".getBytes(Encoding));
+        ledger.addEntry("dummy-entry-5".getBytes(Encoding));
+        ledger.addEntry("dummy-entry-6".getBytes(Encoding));
+
+        cursor.markDelete(p1);
+        cursor.readEntries(2);
+        assertEquals(cursor.getMarkDeletedPosition(), p1);
+
+        try {
+            cursor.seek(cursor.getMarkDeletedPosition());
+            fail("should have failed");
+        } catch (IllegalArgumentException e) {
+            // Ok
+        }
+    }
+
+    @Test(timeOut = 20000)
+    void rewind() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
+        ManagedCursor c1 = ledger.openCursor("c1");
+        Position p1 = ledger.addEntry("dummy-entry-1".getBytes(Encoding));
+        Position p2 = ledger.addEntry("dummy-entry-2".getBytes(Encoding));
+        ledger.addEntry("dummy-entry-3".getBytes(Encoding));
+        Position p4 = ledger.addEntry("dummy-entry-4".getBytes(Encoding));
+
+        assertEquals(c1.getNumberOfEntries(), 4);
+        c1.markDelete(p1);
+        assertEquals(c1.getNumberOfEntries(), 3);
+        assertEquals(c1.readEntries(10).size(), 1);
+        assertEquals(c1.getNumberOfEntries(), 2);
+        c1.rewind();
+        assertEquals(c1.getNumberOfEntries(), 3);
+        c1.markDelete(p2);
+        assertEquals(c1.getNumberOfEntries(), 2);
+        assertEquals(c1.readEntries(10).size(), 0);
+        assertEquals(c1.readEntries(10).size(), 2);
+        assertEquals(c1.getNumberOfEntries(), 0);
+        c1.rewind();
+        assertEquals(c1.getNumberOfEntries(), 2);
+        c1.markDelete(p4);
+        assertEquals(c1.getNumberOfEntries(), 0);
+        c1.rewind();
+        assertEquals(c1.getNumberOfEntries(), 0);
+        ledger.addEntry("dummy-entry-5".getBytes(Encoding));
+        assertEquals(c1.getNumberOfEntries(), 1);
+        ledger.addEntry("dummy-entry-6".getBytes(Encoding));
+        assertEquals(c1.getNumberOfEntries(), 2);
     }
 
     @Test(timeOut = 20000)
@@ -778,6 +838,13 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
 
         try {
             c1.skip(1);
+            fail("read-only mode");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        try {
+            c1.rewind();
             fail("read-only mode");
         } catch (ManagedLedgerException e) {
             // ok
