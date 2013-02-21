@@ -374,8 +374,13 @@ class ManagedCursorImpl implements ManagedCursor {
 
     @Override
     public void rewind() throws ManagedLedgerException {
-        PositionImpl markDeleted = acknowledgedPosition.get();
-        seek(new PositionImpl(markDeleted.getLedgerId(), markDeleted.getEntryId() + 1));
+        // The acked position can possibly be modified before we reset the read position. We need to make sure that this
+        // doesn't happen.
+        PositionImpl markDeleted;
+        do {
+            markDeleted = acknowledgedPosition.get();
+            readPosition.set(new PositionImpl(markDeleted.getLedgerId(), markDeleted.getEntryId() + 1));
+        } while (markDeleted != acknowledgedPosition.get());
     }
 
     @Override
