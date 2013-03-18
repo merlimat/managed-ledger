@@ -37,6 +37,7 @@ class OpAddEntry implements AddCallback, CloseCallback {
     private final AddEntryCallback callback;
     private final Object ctx;
     private boolean closeWhenDone;
+    private final long startTime;
     final byte[] data;
 
     OpAddEntry(ManagedLedgerImpl ml, byte[] data, AddEntryCallback callback, Object ctx) {
@@ -47,6 +48,8 @@ class OpAddEntry implements AddCallback, CloseCallback {
         this.ctx = ctx;
         this.closeWhenDone = false;
         this.entryId = -1;
+        this.startTime = System.nanoTime();
+        ml.mbean.addAddEntrySample(data.length);
     }
 
     public void setLedger(LedgerHandle ledger) {
@@ -63,6 +66,7 @@ class OpAddEntry implements AddCallback, CloseCallback {
 
     public void failed(ManagedLedgerException e) {
         callback.addFailed(e, ctx);
+        ml.mbean.recordAddEntryError();
     }
 
     @Override
@@ -81,14 +85,17 @@ class OpAddEntry implements AddCallback, CloseCallback {
                 log.info("[{}] Closing ledger {} for being full", ml.getName(), lh.getId());
                 ledger.asyncClose(this, ctx);
             } else {
+                updateLatency();
                 callback.addComplete(new PositionImpl(lh.getId(), entryId), ctx);
             }
         } else if (rc == BKException.Code.LedgerFencedException) {
             ManagedLedgerException status = new ManagedLedgerFencedException(BKException.create(rc));
             ml.setFenced();
+            ml.mbean.recordAddEntryError();
             callback.addFailed(status, ctx);
         } else {
             ManagedLedgerException status = new ManagedLedgerException(BKException.create(rc));
+            ml.mbean.recordAddEntryError();
             callback.addFailed(status, ctx);
         }
     }
@@ -104,7 +111,13 @@ class OpAddEntry implements AddCallback, CloseCallback {
         }
 
         ml.ledgerClosed(lh);
+        updateLatency();
         callback.addComplete(new PositionImpl(lh.getId(), entryId), ctx);
+    }
+    
+    private void updateLatency() {
+        double latency = (System.nanoTime() - startTime) / 1e9;
+        ml.mbean.addAddEntryLatencySample(latency);
     }
 
     private static final Logger log = LoggerFactory.getLogger(OpAddEntry.class);

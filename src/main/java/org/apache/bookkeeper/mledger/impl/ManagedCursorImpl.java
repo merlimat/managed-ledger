@@ -63,7 +63,7 @@ class ManagedCursorImpl implements ManagedCursor {
 
     protected final BookKeeper bookkeeper;
     protected final ManagedLedgerConfig config;
-    private final ManagedLedgerImpl ledger;
+    protected final ManagedLedgerImpl ledger;
     private final String name;
 
     private final AtomicReference<PositionImpl> acknowledgedPosition = new AtomicReference<PositionImpl>();

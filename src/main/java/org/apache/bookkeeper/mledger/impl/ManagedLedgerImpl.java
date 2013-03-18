@@ -116,6 +116,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     private final ScheduledExecutorService executor;
     private final OrderedSafeExecutor orderedExecutor;
     private final ManagedLedgerFactoryImpl factory;
+    protected final ManagedLedgerMBeanImpl mbean;
 
     /**
      * Queue of pending entries to be added to the managed ledger. Typically entries are queued when a new ledger is
@@ -129,6 +130,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             ManagedLedgerConfig config, ScheduledExecutorService executor, OrderedSafeExecutor orderedExecutor,
             final String name) {
         this.factory = factory;
+        this.mbean = factory.mbean;
         this.bookKeeper = bookKeeper;
         this.config = config;
         this.store = store;
@@ -1121,6 +1123,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
     MetaStore getStore() {
         return store;
+    }
+    
+    ManagedLedgerConfig getConfig() {
+        return config;
     }
 
     static interface ManagedLedgerInitializeLedgerCallback {

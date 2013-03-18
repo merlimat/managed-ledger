@@ -47,6 +47,7 @@ public class OpReadEntry {
         log.debug("Read entries succeeded count={}", entries.size());
         cursor.setReadPosition(nextReadPosition);
         callback.readEntriesComplete(entries, ctx);
+        cursor.ledger.mbean.addReadEntriesSample(entries);
     }
 
     void emptyResponse() {
@@ -56,6 +57,7 @@ public class OpReadEntry {
 
     void failed(ManagedLedgerException status) {
         callback.readEntriesFailed(status, ctx);
+        cursor.ledger.mbean.recordReadEntriesError();
     }
 
     private static final List<Entry> EmptyList = Collections.emptyList();
