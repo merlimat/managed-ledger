@@ -27,6 +27,11 @@ public interface Entry {
     byte[] getData();
 
     /**
+     * @return the entry lenght in bytes
+     */
+    long getLength();
+
+    /**
      * @return the position at which the entry was stored
      */
     Position getPosition();

@@ -81,7 +81,7 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
     public void addReadEntriesSample(List<Entry> entries) {
         long totalSize = 0;
         for (Entry entry : entries) {
-            totalSize += entry.getData().length;
+            totalSize += entry.getLength();
         }
 
         RecordedStats stats = currentPeriod.get();

@@ -20,14 +20,26 @@ import org.apache.bookkeeper.mledger.Position;
 class EntryImpl implements Entry {
 
     private final LedgerEntry ledgerEntry;
+    private byte[] data;
 
     EntryImpl(LedgerEntry ledgerEntry) {
         this.ledgerEntry = ledgerEntry;
+        this.data = null;
     }
 
     @Override
     public byte[] getData() {
-        return ledgerEntry.getEntry();
+        if (data != null) {
+            return data;
+        }
+
+        data = ledgerEntry.getEntry();
+        return data;
+    }
+
+    @Override
+    public long getLength() {
+        return ledgerEntry.getLength();
     }
 
     @Override

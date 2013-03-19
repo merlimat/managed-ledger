@@ -88,6 +88,25 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
     }
 
     @Test(timeOut = 20000)
+    void getEntryDataTwice() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger");
+
+        ManagedCursor c1 = ledger.openCursor("c1");
+
+        ledger.addEntry("entry-1".getBytes(Encoding));
+
+        List<Entry> entries = c1.readEntries(2);
+        assertEquals(entries.size(), 1);
+
+        Entry entry = entries.get(0);
+        assertEquals(entry.getLength(), "entry-1".length());
+        byte[] data1 = entry.getData();
+        byte[] data2 = entry.getData();
+        assertEquals(data1, data2);
+    }
+
+    @Test(timeOut = 20000)
     void readFromClosedLedger() throws Exception {
         ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
         ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(1));
