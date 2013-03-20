@@ -24,12 +24,13 @@ public class StatsBuckets {
     private final double[] boundaries;
     private final long[] buckets;
     private long count = 0;
-    private double sum = 0;
+    private double sum = Double.NaN;
     private double min = Double.NaN;
     private double max = Double.NaN;
 
     public StatsBuckets(double... boundaries) {
         checkArgument(boundaries.length > 0);
+        checkArgument(isSorted(boundaries), "Boundaries array must be sorted");
         this.boundaries = boundaries;
         this.buckets = new long[boundaries.length + 1];
     }
@@ -37,24 +38,27 @@ public class StatsBuckets {
     public void addValue(double value) {
         int i = 0;
 
-        while (value > boundaries[i] && i < boundaries.length) {
+        while (i < boundaries.length && value > boundaries[i]) {
             ++i;
         }
 
         synchronized (this) {
             buckets[i]++;
+            if (Double.isNaN(sum)) {
+                sum = 0;
+            }
+
             sum += value;
             count++;
 
-            if (min == Double.NaN || value < min) {
+            if (Double.isNaN(min) || value < min) {
                 min = value;
             }
 
-            if (max == Double.NaN || value > max) {
+            if (Double.isNaN(max) || value > max) {
                 max = value;
             }
         }
-
     }
 
     public synchronized long[] getBuckets() {
@@ -79,5 +83,19 @@ public class StatsBuckets {
 
     public synchronized double getMax() {
         return max;
+    }
+
+    private boolean isSorted(double[] array) {
+        double previous = Double.NEGATIVE_INFINITY;
+
+        for (double value : array) {
+            if (value < previous) {
+                return false;
+            }
+
+            previous = value;
+        }
+
+        return true;
     }
 }
