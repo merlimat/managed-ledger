@@ -18,16 +18,22 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static java.lang.Math.min;
 import static org.apache.bookkeeper.mledger.util.VarArgs.va;
 
+import java.lang.management.ManagementFactory;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Queue;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import javax.management.InstanceAlreadyExistsException;
+import javax.management.JMException;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
 
 import org.apache.bookkeeper.client.AsyncCallback;
 import org.apache.bookkeeper.client.AsyncCallback.CreateCallback;
@@ -117,6 +123,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     private final OrderedSafeExecutor orderedExecutor;
     private final ManagedLedgerFactoryImpl factory;
     protected final ManagedLedgerMBeanImpl mbean;
+    private ObjectName mbeanObjectName;
 
     /**
      * Queue of pending entries to be added to the managed ledger. Typically entries are queued when a new ledger is
@@ -130,7 +137,6 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             ManagedLedgerConfig config, ScheduledExecutorService executor, OrderedSafeExecutor orderedExecutor,
             final String name) {
         this.factory = factory;
-        this.mbean = factory.mbean;
         this.bookKeeper = bookKeeper;
         this.config = config;
         this.store = store;
@@ -140,6 +146,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         this.currentLedger = null;
         this.state = State.None;
         this.ledgersVersion = null;
+        this.mbean = new ManagedLedgerMBeanImpl(this);
 
         RemovalListener<Long, LedgerHandle> removalListener = new RemovalListener<Long, LedgerHandle>() {
             public void onRemoval(RemovalNotification<Long, LedgerHandle> entry) {
@@ -154,6 +161,43 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         };
         this.ledgerCache = CacheBuilder.newBuilder().expireAfterAccess(60, TimeUnit.SECONDS)
                 .removalListener(removalListener).build();
+    }
+
+    private void registerMBean(final OpenMode openMode, ManagedLedgerInitializeLedgerCallback callback) {
+        if (openMode == OpenMode.AdminObserver) {
+            log.debug("[{}] Not creating JMX MBean for read-only managed ledger", name);
+            callback.initializeComplete();
+            return;
+        }
+
+        MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+
+        try {
+            mbeanObjectName = new ObjectName("org.apache.bookkeeper.mledger:type=ManagedLedger,factory="
+                    + factory.hashCode() + ",name=" + ObjectName.quote(name));
+        } catch (MalformedObjectNameException e) {
+            log.error("Error in creating JMX Object name for {}", name);
+            callback.initializeFailed(new ManagedLedgerException(e));
+            return;
+        }
+
+        try {
+            mBeanServer.registerMBean(mbean, mbeanObjectName);
+            callback.initializeComplete();
+        } catch (InstanceAlreadyExistsException e) {
+
+        } catch (JMException e) {
+            log.error("Failed to register ManagedLedger MBean", e);
+            callback.initializeFailed(new ManagedLedgerException(e));
+        }
+    }
+
+    private void unregisterMBean() {
+        try {
+            ManagementFactory.getPlatformMBeanServer().unregisterMBean(mbeanObjectName);
+        } catch (Exception e) {
+            log.error("[{}] Error unregistering mbean", name, e);
+        }
     }
 
     synchronized void initialize(final OpenMode openMode, final ManagedLedgerInitializeLedgerCallback callback,
@@ -280,7 +324,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 log.debug("[{}] Found {} cursors", name, consumers.size());
 
                 if (consumers.isEmpty()) {
-                    callback.initializeComplete();
+                    registerMBean(openMode, callback);
                     return;
                 }
 
@@ -302,7 +346,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                             }
 
                             if (cursorCount.decrementAndGet() == 0) {
-                                callback.initializeComplete();
+                                // The initialization is now completed, register the jmx mbean
+                                registerMBean(openMode, callback);
                             }
                         }
 
@@ -550,7 +595,9 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     @Override
     public void close() throws InterruptedException, ManagedLedgerException {
         Iterable<ManagedCursor> cursorsToClose;
+
         synchronized (this) {
+            unregisterMBean();
             checkFenced();
 
             log.info("[{}] Closing managed ledger", name);
@@ -1091,7 +1138,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         return Lists.newArrayList(ledgers.values());
     }
 
-    Executor getExecutor() {
+    ScheduledExecutorService getExecutor() {
         return executor;
     }
 
@@ -1124,7 +1171,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     MetaStore getStore() {
         return store;
     }
-    
+
     ManagedLedgerConfig getConfig() {
         return config;
     }

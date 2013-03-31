@@ -20,13 +20,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedCursor;
-import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerMXBean;
 import org.apache.bookkeeper.mledger.util.StatsBuckets;
 
 public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
 
-    private final ManagedLedgerFactoryImpl mlFactory;
+    private final ManagedLedgerImpl managedLedger;
 
     class RecordedStats {
         final long periodStart = System.nanoTime();
@@ -44,11 +43,11 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
     private AtomicReference<RecordedStats> lastCompletedPeriod = new AtomicReference<RecordedStats>();
     private AtomicReference<RecordedStats> currentPeriod = new AtomicReference<RecordedStats>();
 
-    public ManagedLedgerMBeanImpl(ManagedLedgerFactoryImpl mlFactory) {
-        this.mlFactory = mlFactory;
+    public ManagedLedgerMBeanImpl(ManagedLedgerImpl managedLedger) {
+        this.managedLedger = managedLedger;
         currentPeriod.set(new RecordedStats());
 
-        mlFactory.executor.scheduleAtFixedRate(new Runnable() {
+        managedLedger.getExecutor().scheduleAtFixedRate(new Runnable() {
             public void run() {
                 refreshStats();
             }
@@ -74,8 +73,8 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
         currentPeriod.get().readEntriesOpsFailed.incrementAndGet();
     }
 
-    public void addAddEntryLatencySample(double latency) {
-        currentPeriod.get().addEntryLatencyStatsMs.addValue(latency / 1000);
+    public void addAddEntryLatencySample(double latencyMs) {
+        currentPeriod.get().addEntryLatencyStatsMs.addValue(latencyMs);
     }
 
     public void addReadEntriesSample(List<Entry> entries) {
@@ -88,6 +87,11 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
         stats.readEntriesOpsSucceeded.incrementAndGet();
         stats.readEntriesMsgCount.addAndGet(entries.size());
         stats.readEntriesSize.addAndGet(totalSize);
+    }
+
+    @Override
+    public String getName() {
+        return managedLedger.getName();
     }
 
     @Override
@@ -174,29 +178,16 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
     }
 
     @Override
-    public long getOpenedManagedLedgers() {
-        return mlFactory.ledgers.size();
-    }
-
-    @Override
     public long getStoredMessagesSize() {
-        long totalSize = 0;
-
-        for (ManagedLedgerImpl ml : mlFactory.ledgers.values()) {
-            totalSize += ml.getTotalSize() * ml.getConfig().getWriteQuorumSize();
-        }
-
-        return totalSize;
+        return managedLedger.getTotalSize() * managedLedger.getConfig().getWriteQuorumSize();
     }
 
     @Override
     public long getNumberOfMessagesInBacklog() {
         long count = 0;
 
-        for (ManagedLedger ml : mlFactory.ledgers.values()) {
-            for (ManagedCursor cursor : ml.getCursors()) {
-                count += cursor.getNumberOfEntries();
-            }
+        for (ManagedCursor cursor : managedLedger.getCursors()) {
+            count += cursor.getNumberOfEntries();
         }
 
         return count;

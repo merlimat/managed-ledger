@@ -15,16 +15,11 @@ package org.apache.bookkeeper.mledger.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.lang.management.ManagementFactory;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
-import javax.management.JMException;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeper;
@@ -58,8 +53,6 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
     private final OrderedSafeExecutor orderedExecutor = new OrderedSafeExecutor(5);
 
     protected final ConcurrentMap<String, ManagedLedgerImpl> ledgers = Maps.newConcurrentMap();
-    
-    protected final ManagedLedgerMBeanImpl mbean;
 
     public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration) throws Exception {
         final CountDownLatch counter = new CountDownLatch(1);
@@ -86,8 +79,6 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
         this.isBookkeeperManaged = true;
 
         this.store = new MetaStoreImplZookeeper(zookeeper);
-        this.mbean = new ManagedLedgerMBeanImpl(this);
-        registerMBean();
     }
 
     public ManagedLedgerFactoryImpl(BookKeeper bookKeeper, ZooKeeper zooKeeper) throws Exception {
@@ -95,20 +86,6 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
         this.isBookkeeperManaged = false;
         this.zookeeper = null;
         this.store = new MetaStoreImplZookeeper(zooKeeper);
-        this.mbean = new ManagedLedgerMBeanImpl(this);
-        registerMBean();
-    }
-
-    private void registerMBean() {
-        MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
-
-        try {
-            ObjectName mxbeanName = new ObjectName("org.apache.bookkeeper.mledger:type=ManagedLedger");
-
-            mBeanServer.registerMBean(mbean, mxbeanName);
-        } catch (JMException e) {
-            log.error("Failed to register ManagedLedger MBean", e);
-        }
     }
 
     @Override

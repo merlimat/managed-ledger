@@ -39,7 +39,7 @@ class EntryImpl implements Entry {
 
     @Override
     public long getLength() {
-        return ledgerEntry.getLength();
+        return getData().length;
     }
 
     @Override

@@ -116,8 +116,8 @@ class OpAddEntry implements AddCallback, CloseCallback {
     }
     
     private void updateLatency() {
-        double latency = (System.nanoTime() - startTime) / 1e9;
-        ml.mbean.addAddEntryLatencySample(latency);
+        double latencyMs = (System.nanoTime() - startTime) / 1e6;
+        ml.mbean.addAddEntryLatencySample(latencyMs);
     }
 
     private static final Logger log = LoggerFactory.getLogger(OpAddEntry.class);

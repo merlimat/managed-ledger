@@ -1213,6 +1213,7 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
 
         assertEquals(bkc.getLedgers().size(), 3);
 
+        ledger.close();
         factory.delete("my_test_ledger");
         assertEquals(bkc.getLedgers().size(), 0);
 

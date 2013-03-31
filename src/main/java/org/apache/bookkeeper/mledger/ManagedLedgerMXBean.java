@@ -16,9 +16,9 @@ package org.apache.bookkeeper.mledger;
 public interface ManagedLedgerMXBean {
 
     /**
-     * @return the number of currently opened managed ledger
+     * @return the ManagedLedger name
      */
-    long getOpenedManagedLedgers();
+    String getName();
 
     /**
      * @return the total size of the messages in active ledgers (accounting for the multiple copies stored)
