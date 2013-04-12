@@ -103,7 +103,11 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
     @Override
     public double getAddEntryBytesRate() {
         RecordedStats stats = lastCompletedPeriod.get();
-        return stats.entryStats.getSum() / stats.periodDuration;
+        if (Double.isNaN(stats.entryStats.getSum())) {
+            return 0.0;
+        } else {
+            return stats.entryStats.getSum() / stats.periodDuration;
+        }
     }
 
     @Override
