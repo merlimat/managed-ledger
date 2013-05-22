@@ -18,15 +18,27 @@ import static org.testng.Assert.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
+
+import junit.framework.Assert;
 
 import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.commons.lang.math.RandomUtils;
 import org.testng.annotations.Test;
 
 public class ManagedLedgerMBeanTest extends BookKeeperClusterTestCase {
-
+    
+    private void waitForRefresh(ManagedLedgerMBeanImpl mbean) {
+        try {
+            Thread.sleep(100);
+        } catch (Exception e) {
+            // do nothing
+        }
+    }
+    
     @Test
     public void simple() throws Exception {
         ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, zkc);
@@ -39,6 +51,8 @@ public class ManagedLedgerMBeanTest extends BookKeeperClusterTestCase {
         assertEquals(mbean.getStoredMessagesSize(), 0);
         assertEquals(mbean.getNumberOfMessagesInBacklog(), 0);
 
+        waitForRefresh(mbean);
+        
         mbean.addAddEntryLatencySample(1.0);
         mbean.addAddEntryLatencySample(10.0);
         mbean.addAddEntryLatencySample(1000.0);
