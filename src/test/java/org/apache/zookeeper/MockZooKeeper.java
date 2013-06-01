@@ -1,11 +1,10 @@
 package org.apache.zookeeper;
 
 import java.lang.reflect.Constructor;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,7 +33,7 @@ import com.google.common.collect.SetMultimap;
 
 @SuppressWarnings({ "deprecation", "restriction", "rawtypes" })
 public class MockZooKeeper extends ZooKeeper {
-    private SortedMap<String, String> tree;
+    private ConcurrentNavigableMap<String, String> tree;
     private SetMultimap<String, Watcher> watchers;
     private AtomicBoolean stopped;
 
@@ -60,7 +59,7 @@ public class MockZooKeeper extends ZooKeeper {
 
     private void init() {
         executor = Executors.newFixedThreadPool(1);
-        tree = Collections.synchronizedSortedMap(new TreeMap<String, String>());
+        tree = new ConcurrentSkipListMap<String, String>();
         SetMultimap<String, Watcher> w = HashMultimap.create();
         watchers = Multimaps.synchronizedSetMultimap(w);
         stopped = new AtomicBoolean(false);
@@ -295,7 +294,10 @@ public class MockZooKeeper extends ZooKeeper {
         if (stopped.get())
             throw new KeeperException.ConnectionLossException();
 
-        tree.put(path, new String(data));
+        if (tree.replace(path, new String(data)) == null) {
+            throw new KeeperException.NoNodeException();
+        }
+
         Set<Watcher> toNotify = Sets.newHashSet();
         toNotify.addAll(watchers.get(path));
         watchers.removeAll(path);
@@ -324,7 +326,11 @@ public class MockZooKeeper extends ZooKeeper {
                 } catch (InterruptedException e) {
                 }
 
-                tree.put(path, new String(data));
+                if (tree.replace(path, new String(data)) == null) {
+                    cb.processResult(KeeperException.Code.NoNode, path, ctx, null);
+                    return;
+                }
+
                 cb.processResult(0, path, ctx, new Stat());
 
                 for (Watcher watcher : watchers.get(path)) {
