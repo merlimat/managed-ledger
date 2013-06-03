@@ -93,7 +93,19 @@ public class MockZooKeeper extends ZooKeeper {
         if (tree.containsKey(path)) {
             throw new KeeperException.NodeExistsException(path);
         }
+
+        String parent = path.substring(0, path.lastIndexOf("/"));
+        if (!parent.isEmpty() && !tree.containsKey(parent)) {
+            throw new KeeperException.NoNodeException();
+        }
+
         tree.put(path, new String(data));
+        if (!parent.isEmpty()) {
+            for (Watcher watcher : watchers.get(parent)) {
+                watcher.process(new WatchedEvent(EventType.NodeChildrenChanged, KeeperState.SyncConnected, path));
+            }
+        }
+
         return path;
     }
 
@@ -102,12 +114,16 @@ public class MockZooKeeper extends ZooKeeper {
             final StringCallback cb, final Object ctx) {
         executor.execute(new Runnable() {
             public void run() {
+                String parent = path.substring(0, path.lastIndexOf("/"));
+
                 if (getProgrammedFailStatus()) {
                     cb.processResult(failReturnCode.intValue(), path, ctx, null);
                 } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.CONNECTIONLOSS.intValue(), path, ctx, null);
                 } else if (tree.containsKey(path)) {
                     cb.processResult(KeeperException.Code.NODEEXISTS.intValue(), path, ctx, null);
+                } else if (!parent.isEmpty() && !tree.containsKey(parent)) {
+                    cb.processResult(KeeperException.Code.NONODE.intValue(), path, ctx, null);
                 } else {
                     tree.put(path, new String(data));
                     cb.processResult(0, path, ctx, null);
@@ -213,28 +229,61 @@ public class MockZooKeeper extends ZooKeeper {
     }
 
     @Override
-    public List<String> getChildren(String path, boolean watch) throws KeeperException, InterruptedException {
+    public List<String> getChildren(String path, Watcher watcher) throws KeeperException {
         checkProgrammedFail();
 
-        if (stopped.get()) {
-            throw new KeeperException.ConnectionLossException();
+        if (!tree.containsKey(path)) {
+            throw new KeeperException.NoNodeException();
         }
 
         List<String> children = Lists.newArrayList();
         for (String item : tree.tailMap(path).keySet()) {
             if (!item.startsWith(path)) {
                 break;
-            } else if (item.equals(path)) {
-                continue;
             } else {
+                if (path.length() >= item.length()) {
+                    continue;
+                }
+
                 String child = item.substring(path.length() + 1);
-                log.debug("path: '{}' -- item: '{}' -- child: '{}'", new Object[] { path, item, child });
                 if (!child.contains("/")) {
                     children.add(child);
                 }
             }
         }
 
+        if (watcher != null) {
+            watchers.put(path, watcher);
+        }
+
+        return children;
+    }
+
+    @Override
+    public List<String> getChildren(String path, boolean watch) throws KeeperException, InterruptedException {
+        checkProgrammedFail();
+
+        if (stopped.get()) {
+            throw new KeeperException.ConnectionLossException();
+        } else if (!tree.containsKey(path)) {
+            throw new KeeperException.NoNodeException();
+        }
+
+        List<String> children = Lists.newArrayList();
+        for (String item : tree.tailMap(path).keySet()) {
+            if (!item.startsWith(path)) {
+                break;
+            } else {
+                if (path.length() >= item.length()) {
+                    continue;
+                }
+
+                String child = item.substring(path.length() + 1);
+                if (!child.contains("/")) {
+                    children.add(child);
+                }
+            }
+        }
         return children;
     }
 
@@ -247,6 +296,9 @@ public class MockZooKeeper extends ZooKeeper {
                     return;
                 } else if (stopped.get()) {
                     cb.processResult(KeeperException.Code.ConnectionLoss, path, ctx, null, null);
+                    return;
+                } else if (!tree.containsKey(path)) {
+                    cb.processResult(KeeperException.Code.NoNode, path, ctx, null, null);
                     return;
                 }
 
@@ -354,6 +406,13 @@ public class MockZooKeeper extends ZooKeeper {
 
         for (Watcher watcher : watchers.get(path)) {
             watcher.process(new WatchedEvent(EventType.NodeDeleted, KeeperState.SyncConnected, path));
+        }
+
+        String parent = path.substring(0, path.lastIndexOf("/"));
+        if (!parent.isEmpty()) {
+            for (Watcher watcher : watchers.get(parent)) {
+                watcher.process(new WatchedEvent(EventType.NodeChildrenChanged, KeeperState.SyncConnected, path));
+            }
         }
 
         watchers.removeAll(path);
