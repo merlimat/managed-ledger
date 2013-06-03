@@ -18,15 +18,11 @@ import static org.testng.Assert.assertTrue;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
-
-import junit.framework.Assert;
 
 import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
-import org.apache.commons.lang.math.RandomUtils;
 import org.testng.annotations.Test;
 
 public class ManagedLedgerMBeanTest extends BookKeeperClusterTestCase {
