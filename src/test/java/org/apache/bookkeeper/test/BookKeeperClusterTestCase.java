@@ -15,6 +15,7 @@ package org.apache.bookkeeper.test;
 
 import org.apache.bookkeeper.client.MockBookKeeper;
 import org.apache.bookkeeper.conf.ClientConfiguration;
+import org.apache.bookkeeper.util.ZkUtils;
 import org.apache.zookeeper.MockZooKeeper;
 import org.apache.zookeeper.ZooKeeper;
 import org.slf4j.Logger;
@@ -73,7 +74,7 @@ public abstract class BookKeeperClusterTestCase {
     protected void startBookKeeper() throws Exception {
         zkc = MockZooKeeper.newInstance();
         for (int i = 0; i < numBookies; i++) {
-            zkc.create("/ledgers/available/192.168.1.1:" + (5000 + i), "".getBytes(), null, null);
+            ZkUtils.createFullPathOptimistic(zkc, "/ledgers/available/192.168.1.1:" + (5000 + i), "".getBytes(), null, null);
         }
 
         zkc.create("/ledgers/LAYOUT", "1\nflat:1".getBytes(), null, null);
