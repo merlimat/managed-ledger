@@ -22,6 +22,7 @@ import org.apache.bookkeeper.mledger.ManagedLedgerException.BadVersionException;
 import org.apache.bookkeeper.mledger.ManagedLedgerException.MetaStoreException;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.ManagedCursorInfo;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.ManagedLedgerInfo;
+import org.apache.bookkeeper.util.ZkUtils;
 import org.apache.zookeeper.AsyncCallback.Children2Callback;
 import org.apache.zookeeper.AsyncCallback.DataCallback;
 import org.apache.zookeeper.AsyncCallback.StatCallback;
@@ -95,7 +96,9 @@ class MetaStoreImplZookeeper implements MetaStore {
                             }
                         }
                     };
-                    zk.create(prefix + ledgerName, new byte[0], Acl, CreateMode.PERSISTENT, createcb, null);
+
+                    ZkUtils.createFullPathOptimistic(zk, prefix + ledgerName, new byte[0], Acl, CreateMode.PERSISTENT,
+                            createcb, null);
                 } else {
                     callback.operationFailed(new MetaStoreException(
                             KeeperException.create(KeeperException.Code.get(rc))));

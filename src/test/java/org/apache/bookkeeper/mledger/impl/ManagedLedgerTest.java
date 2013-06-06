@@ -1249,4 +1249,11 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
         latch.await();
         assertEquals(bkc.getLedgers().size(), 0);
     }
+
+    @Test
+    public void compositeNames() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        // Should not throw exception
+        factory.open("my/test/ledger");
+    }
 }
