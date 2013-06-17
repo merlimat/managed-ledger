@@ -16,7 +16,8 @@ import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.inject.internal.Lists;
+import com.google.common.collect.Lists;
+
 
 public class MockLedgerHandle extends LedgerHandle {
 
