@@ -1,7 +1,5 @@
 package org.apache.bookkeeper.client;
 
-import static org.apache.bookkeeper.mledger.util.VarArgs.va;
-
 import java.security.GeneralSecurityException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -61,7 +59,7 @@ public class MockLedgerHandle extends LedgerHandle {
                     return;
                 }
 
-                log.debug("readEntries: first={} last={} total={}", va(firstEntry, lastEntry, entries.size()));
+                log.debug("readEntries: first={} last={} total={}", firstEntry, lastEntry, entries.size());
                 final Queue<LedgerEntry> seq = new ArrayDeque<LedgerEntry>();
                 long entryId = firstEntry;
                 while (entryId <= lastEntry && entryId < entries.size()) {

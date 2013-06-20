@@ -14,7 +14,6 @@
 package org.apache.bookkeeper.mledger.impl;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static org.apache.bookkeeper.mledger.util.VarArgs.va;
 
 import org.apache.bookkeeper.client.AsyncCallback.AddCallback;
 import org.apache.bookkeeper.client.AsyncCallback.CloseCallback;
@@ -76,7 +75,7 @@ class OpAddEntry implements AddCallback, CloseCallback {
 
         this.entryId = entryId;
 
-        log.debug("[{}] write-complete: ledger-id={} entry-id={} rc={}", va(ml.getName(), lh.getId(), entryId, rc));
+        log.debug("[{}] write-complete: ledger-id={} entry-id={} rc={}", ml.getName(), lh.getId(), entryId, rc);
         if (rc == BKException.Code.OK) {
             ml.numberOfEntries.incrementAndGet();
             ml.totalSize.addAndGet(data.length);

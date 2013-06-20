@@ -13,8 +13,6 @@
  */
 package org.apache.bookkeeper.mledger;
 
-import static org.apache.bookkeeper.mledger.util.VarArgs.va;
-
 import java.nio.charset.Charset;
 import java.util.Enumeration;
 
@@ -53,7 +51,7 @@ public class SimpleBookKeeperTest extends BookKeeperClusterTestCase {
         while (entries.hasMoreElements()) {
             LedgerEntry entry = entries.nextElement();
             String content = new String(entry.getEntry(), Encoding);
-            log.info("Entry {}  lenght={} content='{}'", va(entry.getEntryId(), entry.getLength(), content));
+            log.info("Entry {}  lenght={} content='{}'", entry.getEntryId(), entry.getLength(), content);
         }
 
         ledger.close();

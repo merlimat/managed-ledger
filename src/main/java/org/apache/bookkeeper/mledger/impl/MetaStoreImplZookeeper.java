@@ -13,8 +13,6 @@
  */
 package org.apache.bookkeeper.mledger.impl;
 
-import static org.apache.bookkeeper.mledger.util.VarArgs.va;
-
 import java.nio.charset.Charset;
 import java.util.List;
 
@@ -112,7 +110,7 @@ class MetaStoreImplZookeeper implements MetaStore {
             final MetaStoreCallback<Void> callback) {
 
         ZKVersion zkVersion = (ZKVersion) version;
-        log.debug("Updating {} version={} with content={}", va(prefix + ledgerName, zkVersion.version, mlInfo));
+        log.debug("Updating {} version={} with content={}", prefix + ledgerName, zkVersion.version, mlInfo);
 
         zk.setData(prefix + ledgerName, mlInfo.toString().getBytes(Encoding), zkVersion.version, new StatCallback() {
             public void processResult(int rc, String path, Object zkCtx, Stat stat) {
@@ -180,30 +178,29 @@ class MetaStoreImplZookeeper implements MetaStore {
     @Override
     public void asyncUpdateConsumer(final String ledgerName, final String consumerName, final ManagedCursorInfo info,
             Version version, final MetaStoreCallback<Void> callback) {
-        log.info("[{}] Updating ledger_id consumer={} {}", va(ledgerName, consumerName, info));
+        log.info("[{}] Updating ledger_id consumer={} {}", ledgerName, consumerName, info);
 
         String path = prefix + ledgerName + "/" + consumerName;
         byte[] content = info.toString().getBytes(Encoding);
 
         if (version == null) {
-            log.debug("[{}] Creating consumer {} on meta-data store with {}", va(ledgerName, consumerName, info));
+            log.debug("[{}] Creating consumer {} on meta-data store with {}", ledgerName, consumerName, info);
             zk.create(path, content, Acl, CreateMode.PERSISTENT, new StringCallback() {
                 public void processResult(int rc, String path, Object ctx, String name) {
                     if (rc != KeeperException.Code.OK.intValue()) {
-                        log.warn("[{}] Error creating cosumer {} node on meta-data store with {}",
-                                va(ledgerName, consumerName, info));
+                        log.warn("[{}] Error creating cosumer {} node on meta-data store with {}", ledgerName,
+                                consumerName, info);
                         callback.operationFailed(new MetaStoreException(KeeperException.create(KeeperException.Code
                                 .get(rc))));
                     } else {
-                        log.debug("[{}] Created consumer {} on meta-data store with {}",
-                                va(ledgerName, consumerName, info));
+                        log.debug("[{}] Created consumer {} on meta-data store with {}", ledgerName, consumerName, info);
                         callback.operationComplete(null, new ZKVersion(0));
                     }
                 }
             }, null);
         } else {
             ZKVersion zkVersion = (ZKVersion) version;
-            log.debug("[{}] Updating consumer {} on meta-data store with {}", va(ledgerName, consumerName, info));
+            log.debug("[{}] Updating consumer {} on meta-data store with {}", ledgerName, consumerName, info);
             zk.setData(path, content, zkVersion.version, new StatCallback() {
                 public void processResult(int rc, String path, Object ctx, Stat stat) {
                     if (rc != KeeperException.Code.OK.intValue()) {

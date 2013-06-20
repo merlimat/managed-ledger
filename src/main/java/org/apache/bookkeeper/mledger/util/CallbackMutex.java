@@ -13,8 +13,6 @@
  */
 package org.apache.bookkeeper.mledger.util;
 
-import static org.apache.bookkeeper.mledger.util.VarArgs.va;
-
 import java.util.concurrent.Semaphore;
 
 import org.slf4j.Logger;
@@ -40,7 +38,7 @@ public class CallbackMutex {
 
         if (log.isDebugEnabled()) {
             position = Thread.currentThread().getStackTrace()[2].toString();
-            log.debug("<<< Lock {} acquired at {}", va(this.hashCode(), position));
+            log.debug("<<< Lock {} acquired at {}", this.hashCode(), position);
         }
     }
 
@@ -48,8 +46,7 @@ public class CallbackMutex {
         owner = null;
         position = null;
         if (log.isDebugEnabled()) {
-            log.debug(">>> Lock {} released token={} at {}",
-                    va(this.hashCode(), Thread.currentThread().getStackTrace()[2]));
+            log.debug(">>> Lock {} released token={} at {}", this.hashCode(), Thread.currentThread().getStackTrace()[2]);
         }
 
         semaphore.release();

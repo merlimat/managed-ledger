@@ -16,7 +16,6 @@ package org.apache.bookkeeper.mledger.impl;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.lang.Math.min;
-import static org.apache.bookkeeper.mledger.util.VarArgs.va;
 
 import java.lang.management.ManagementFactory;
 import java.util.Enumeration;
@@ -151,11 +150,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         RemovalListener<Long, LedgerHandle> removalListener = new RemovalListener<Long, LedgerHandle>() {
             public void onRemoval(RemovalNotification<Long, LedgerHandle> entry) {
                 LedgerHandle ledger = entry.getValue();
-                log.debug("[{}] Closing ledger: {} cause={}", va(name, ledger.getId(), entry.getCause()));
+                log.debug("[{}] Closing ledger: {} cause={}", name, ledger.getId(), entry.getCause());
                 try {
                     ledger.close();
                 } catch (Exception e) {
-                    log.error("[{}] Error closing ledger {}: {}", va(name, ledger.getId(), e));
+                    log.error("[{}] Error closing ledger {}", name, ledger.getId(), e);
                 }
             }
         };
@@ -217,7 +216,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     final long id = ledgers.lastKey();
                     OpenCallback opencb = new OpenCallback() {
                         public void openComplete(int rc, LedgerHandle lh, Object ctx) {
-                            log.debug("[{}] Opened ledger {}: ", va(name, id, BKException.getMessage(rc)));
+                            log.debug("[{}] Opened ledger {}: ", name, id, BKException.getMessage(rc));
                             if (rc == BKException.Code.OK) {
                                 LedgerInfo info = LedgerInfo.newBuilder().setLedgerId(id)
                                         .setEntries(lh.getLastAddConfirmed() + 1).setSize(lh.getLength()).build();
@@ -235,7 +234,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                                 log.warn("[{}] Ledger not found: {}", name, ledgers.lastKey());
                                 initializeBookKeeper(openMode, callback);
                             } else {
-                                log.error("[{}] Failed to open ledger {}: {}", va(name, id, BKException.getMessage(rc)));
+                                log.error("[{}] Failed to open ledger {}: {}", name, id, BKException.getMessage(rc));
                                 callback.initializeFailed(new ManagedLedgerException(BKException.create(rc)));
                                 return;
                             }
@@ -339,8 +338,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
                     cursor.recover(new VoidCallback() {
                         public void operationComplete() {
-                            log.debug("[{}] Recovery for cursor {} completed. todo={}",
-                                    va(name, cursorName, cursorCount.get() - 1));
+                            log.debug("[{}] Recovery for cursor {} completed. todo={}", name, cursorName,
+                                    cursorCount.get() - 1);
                             synchronized (ManagedLedgerImpl.this) {
                                 cursors.add(cursor);
                             }
@@ -405,7 +404,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
     @Override
     public synchronized void asyncAddEntry(final byte[] data, final AddEntryCallback callback, final Object ctx) {
-        log.debug("[{}] asyncAddEntry size={} state={}", va(name, data.length, state));
+        log.debug("[{}] asyncAddEntry size={} state={}", name, data.length, state);
         if (state == State.Fenced) {
             callback.addFailed(new ManagedLedgerFencedException(), ctx);
             return;
@@ -650,11 +649,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
     @Override
     public synchronized void createComplete(int rc, LedgerHandle lh, Object ctx) {
-        log.debug("[{}] createComplete rc={} ledger={}", va(name, rc, lh != null ? lh.getId() : -1));
+        log.debug("[{}] createComplete rc={} ledger={}", name, rc, lh != null ? lh.getId() : -1);
 
         if (rc != BKException.Code.OK) {
             state = State.ClosedLedger;
-            log.error("[{}] Error creating ledger rc={} {}", va(name, rc, BKException.getMessage(rc)));
+            log.error("[{}] Error creating ledger rc={} {}", name, rc, BKException.getMessage(rc));
             ManagedLedgerException status = new ManagedLedgerException(BKException.create(rc));
 
             // Empty the list of pending requests and make all of them fail
@@ -725,8 +724,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                 state = State.ClosingLedger;
                 op.setCloseWhenDone(true);
                 op.initiate();
-                log.debug("[{}] Stop writing into ledger {} queue={}",
-                        va(name, currentLedger.getId(), pendingAddEntries.size()));
+                log.debug("[{}] Stop writing into ledger {} queue={}", name, currentLedger.getId(),
+                        pendingAddEntries.size());
                 break;
             } else {
                 op.initiate();
@@ -741,7 +740,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         checkArgument(lh.getId() == currentLedger.getId());
         state = State.ClosedLedger;
 
-        log.debug("[{}] Ledger has been closed id={} entries={}", va(name, lh.getId(), lh.getLastAddConfirmed() + 1));
+        log.debug("[{}] Ledger has been closed id={} entries={}", name, lh.getId(), lh.getLastAddConfirmed() + 1);
         LedgerInfo info = LedgerInfo.newBuilder().setLedgerId(lh.getId()).setEntries(lh.getLastAddConfirmed() + 1)
                 .setSize(lh.getLength()).build();
         ledgers.put(lh.getId(), info);
@@ -790,8 +789,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         long firstEntry = opReadEntry.readPosition.getEntryId();
 
         if (firstEntry > ledger.getLastAddConfirmed()) {
-            log.debug("[{}] No more messages to read from ledger={} lastEntry={} readEntry={}",
-                    va(name, ledger.getId(), ledger.getLastAddConfirmed(), firstEntry));
+            log.debug("[{}] No more messages to read from ledger={} lastEntry={} readEntry={}", name, ledger.getId(),
+                    ledger.getLastAddConfirmed(), firstEntry);
 
             if (ledger.getId() != currentLedger.getId()) {
                 // Cursor was placed past the end of one ledger, move it to the
@@ -809,8 +808,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         long expectedEntries = lastEntry - firstEntry + 1;
         opReadEntry.entries = Lists.newArrayListWithExpectedSize((int) expectedEntries);
 
-        log.debug("[{}] Reading entries from ledger {} - first={} last={}",
-                va(name, ledger.getId(), firstEntry, lastEntry));
+        log.debug("[{}] Reading entries from ledger {} - first={} last={}", name, ledger.getId(), firstEntry, lastEntry);
         ledger.asyncReadEntries(firstEntry, lastEntry, this, opReadEntry);
     }
 
@@ -819,7 +817,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         OpReadEntry opReadEntry = (OpReadEntry) ctx;
 
         if (rc != BKException.Code.OK) {
-            log.warn("[{}] read failed from ledger {} at position:{}", va(name, lh.getId(), opReadEntry.readPosition));
+            log.warn("[{}] read failed from ledger {} at position:{}", name, lh.getId(), opReadEntry.readPosition);
             opReadEntry.failed(new ManagedLedgerException(BKException.create(rc)));
             return;
         }
@@ -860,7 +858,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         OpReadEntry opReadEntry = (OpReadEntry) ctx;
 
         if (rc != BKException.Code.OK) {
-            log.error("[{}] Error opening ledger: {}", name, opReadEntry.readPosition);
+            log.error("[{}] Error opening ledger: {} {}", name, opReadEntry.readPosition, BKException.create(rc));
             opReadEntry.failed(new ManagedLedgerException(BKException.create(rc)));
             return;
         }
@@ -927,8 +925,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         List<LedgerInfo> ledgersToDelete = Lists.newArrayList();
 
         synchronized (this) {
-            log.debug("[{}] Start TrimConsumedLedgers. ledgers={} entries={}",
-                    va(name, ledgers.keySet(), totalSize.get()));
+            log.debug("[{}] Start TrimConsumedLedgers. ledgers={} entries={}", name, ledgers.keySet(), totalSize.get());
 
             long slowestReaderLedgerId = -1;
             if (cursors.isEmpty()) {
@@ -971,7 +968,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             } catch (BKNoSuchLedgerExistsException e) {
                 log.warn("[{}] Ledger was already deleted {}", name, ls.getLedgerId());
             } catch (Exception e) {
-                log.error("[{}] Error deleting ledger {}", name, ls.getLedgerId());
+                log.error("[{}] Error deleting ledger {}", name, ls.getLedgerId(), e);
                 trimmerMutex.unlock();
                 return;
             }
@@ -1003,8 +1000,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             ManagedLedgerInfo mlInfo = ManagedLedgerInfo.newBuilder().addAllLedgerInfo(ledgers.values()).build();
             store.asyncUpdateLedgerIds(name, mlInfo, ledgersVersion, new MetaStoreCallback<Void>() {
                 public void operationComplete(Void result, Version version) {
-                    log.info("[{}] End TrimConsumedLedgers. ledgers={} entries={}",
-                            va(name, ledgers.size(), totalSize.get()));
+                    log.info("[{}] End TrimConsumedLedgers. ledgers={} entries={}", name, ledgers.size(),
+                            totalSize.get());
                     ledgersVersion = version;
                     ledgersListMutex.unlock();
                     trimmerMutex.unlock();
@@ -1059,7 +1056,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         long count = 0;
         // First count the number of unread entries in the ledger pointed by
         // position
-        log.debug("[{}] getNumberOfEntries. ledgers={} position={}", va(name, ledgers, position));
+        log.debug("[{}] getNumberOfEntries. ledgers={} position={}", name, ledgers, position);
         count += ledgers.get(position.getLedgerId()).getEntries() - position.getEntryId();
 
         // Then, recur all the next ledgers and sum all the entries they contain
@@ -1085,7 +1082,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
      * @return the new position
      */
     synchronized PositionImpl skipEntries(PositionImpl startPosition, int entriesToSkip) {
-        log.debug("[{}] Skipping {} entries from position {}", va(name, entriesToSkip, startPosition));
+        log.debug("[{}] Skipping {} entries from position {}", name, entriesToSkip, startPosition);
         long ledgerId = startPosition.getLedgerId();
         entriesToSkip += startPosition.getEntryId();
 
