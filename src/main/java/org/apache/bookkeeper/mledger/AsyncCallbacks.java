@@ -72,4 +72,10 @@ public interface AsyncCallbacks {
         public void markDeleteFailed(ManagedLedgerException exception, Object ctx);
     }
 
+    public interface DeleteCallback {
+        public void deleteComplete(Object ctx);
+
+        public void deleteFailed(ManagedLedgerException exception, Object ctx);
+    }
+
 }

@@ -18,6 +18,7 @@ import static org.testng.Assert.fail;
 
 import java.util.List;
 
+import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 import org.apache.bookkeeper.mledger.Entry;
@@ -107,6 +108,14 @@ public class ManagedCursorContainerTest {
 
         @Override
         public void close() {
+        }
+
+        @Override
+        public void delete(Position position) throws InterruptedException, ManagedLedgerException {
+        }
+
+        @Override
+        public void asyncDelete(Position position, DeleteCallback callback, Object ctx) {
         }
 
     }

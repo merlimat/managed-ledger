@@ -955,5 +955,50 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         }
     }
 
+    @Test(timeOut = 20000)
+    void testSingleDelete() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(3));
+        ManagedCursor cursor = ledger.openCursor("c1");
+
+        Position p1 = ledger.addEntry("entry1".getBytes());
+        Position p2 = ledger.addEntry("entry2".getBytes());
+        Position p3 = ledger.addEntry("entry3".getBytes());
+        Position p4 = ledger.addEntry("entry4".getBytes());
+        Position p5 = ledger.addEntry("entry5".getBytes());
+        Position p6 = ledger.addEntry("entry6".getBytes());
+
+        Position p0 = cursor.getMarkDeletedPosition();
+
+        cursor.delete(p4);
+        assertEquals(cursor.getMarkDeletedPosition(), p0);
+
+        cursor.delete(p1);
+        assertEquals(cursor.getMarkDeletedPosition(), p1);
+
+        cursor.delete(p3);
+        assertEquals(cursor.getMarkDeletedPosition(), p1);
+
+        try {
+            cursor.delete(p3);
+            fail("already deleted");
+        } catch (IllegalArgumentException e) {
+            // ok
+        }
+
+        cursor.delete(p2);
+        assertEquals(cursor.getMarkDeletedPosition(), p4);
+
+        cursor.delete(p5);
+        assertEquals(cursor.getMarkDeletedPosition(), p5);
+
+        cursor.close();
+        try {
+            cursor.delete(p6);
+        } catch (ManagedLedgerException e) {
+            // Ok
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorTest.class);
 }

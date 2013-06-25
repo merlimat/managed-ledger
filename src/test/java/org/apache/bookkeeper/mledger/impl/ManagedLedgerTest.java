@@ -1256,4 +1256,41 @@ public class ManagedLedgerTest extends BookKeeperClusterTestCase {
         // Should not throw exception
         factory.open("my/test/ledger");
     }
+
+    @Test
+    public void previousPosition() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open("my_test_ledger",
+                new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
+        ManagedCursor cursor = ledger.openCursor("my_cursor");
+
+        Position p0 = cursor.getMarkDeletedPosition();
+        // This is expected because p0 is already an "invalid" position (since no entry has been mark-deleted yet)
+        assertEquals(ledger.getPreviousPosition((PositionImpl) p0), p0);
+
+        // Force to close an empty ledger
+        ledger.close();
+
+        ledger = (ManagedLedgerImpl) factory
+                .open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
+        // again
+        ledger.close();
+
+        ledger = (ManagedLedgerImpl) factory
+                .open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
+        Position p1 = ledger.addEntry("entry".getBytes());
+        ledger.close();
+
+        ledger = (ManagedLedgerImpl) factory
+                .open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
+        Position p2 = ledger.addEntry("entry".getBytes());
+        Position p3 = ledger.addEntry("entry".getBytes());
+        Position p4 = ledger.addEntry("entry".getBytes());
+
+        assertEquals(ledger.getPreviousPosition((PositionImpl) p1), p0);
+        assertEquals(ledger.getPreviousPosition((PositionImpl) p2), p1);
+        assertEquals(ledger.getPreviousPosition((PositionImpl) p3), p2);
+        assertEquals(ledger.getPreviousPosition((PositionImpl) p4), p3);
+    }
+
 }

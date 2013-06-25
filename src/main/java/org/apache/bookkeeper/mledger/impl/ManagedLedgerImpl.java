@@ -20,6 +20,7 @@ import static java.lang.Math.min;
 import java.lang.management.ManagementFactory;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Queue;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
@@ -526,7 +527,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         // ledger from BK) don't, we end up having a loose ledger leaked but the state will be consistent.
         store.asyncRemoveConsumer(ManagedLedgerImpl.this.name, consumerName, new MetaStoreCallback<Void>() {
             public void operationComplete(Void result, Version version) {
-                cursor.asyncDelete(new VoidCallback() {
+                cursor.asyncDeleteCursor(new VoidCallback() {
                     public void operationComplete() {
                         synchronized (ManagedLedgerImpl.this) {
                             cursors.removeCursor(consumerName);
@@ -1104,6 +1105,41 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         }
 
         return new PositionImpl(ledgerId, 0);
+    }
+
+    /**
+     * Get the entry position that come before the specified position in the message stream, using information from the
+     * ledger list and each ledger entries count.
+     * 
+     * @param position
+     *            the current position
+     * @return the previous position
+     */
+    PositionImpl getPreviousPosition(PositionImpl position) {
+        if (position.getEntryId() > 0) {
+            return new PositionImpl(position.getLedgerId(), position.getEntryId() - 1);
+        }
+
+        // The previous position will be the last position of an earlier ledgers
+        synchronized (this) {
+            NavigableMap<Long, LedgerInfo> headMap = ledgers.headMap(position.getLedgerId(), false);
+
+            if (headMap.isEmpty()) {
+                // There is no previous ledger, return an invalid position in the current ledger
+                return new PositionImpl(position.getLedgerId(), -1);
+            }
+
+            // We need to find the most recent non-empty ledger
+            for (long ledgerId : headMap.descendingKeySet()) {
+                LedgerInfo li = headMap.get(ledgerId);
+                if (li.getEntries() > 0) {
+                    return new PositionImpl(li.getLedgerId(), li.getEntries() - 1);
+                }
+            }
+
+            // in case there are only empty ledgers, we return a position in the first one
+            return new PositionImpl(ledgers.firstEntry().getKey(), -1);
+        }
     }
 
     /**

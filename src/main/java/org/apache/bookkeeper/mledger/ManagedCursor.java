@@ -15,6 +15,7 @@ package org.apache.bookkeeper.mledger;
 
 import java.util.List;
 
+import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 
@@ -23,8 +24,8 @@ import com.google.common.annotations.Beta;
 /**
  * A ManangedCursor is a persisted cursor inside a ManagedLedger.
  * <p>
- * The ManagedCursor is used to read from the ManagedLedger and to signal when
- * the consumer is done with the messages that it has read before.
+ * The ManagedCursor is used to read from the ManagedLedger and to signal when the consumer is done with the messages
+ * that it has read before.
  */
 @Beta
 public interface ManagedCursor {
@@ -37,8 +38,7 @@ public interface ManagedCursor {
     public String getName();
 
     /**
-     * Read entries from the ManagedLedger, up to the specified number. The
-     * returned list can be smaller.
+     * Read entries from the ManagedLedger, up to the specified number. The returned list can be smaller.
      * 
      * @param numberOfEntriesToRead
      *            maximum number of entries to return
@@ -72,17 +72,15 @@ public interface ManagedCursor {
     /**
      * Return the number of messages that this cursor still has to read.
      * 
-     * This method has linear time complexity on the number of ledgers included
-     * in the managed ledger.
+     * This method has linear time complexity on the number of ledgers included in the managed ledger.
      * 
      * @return the number of entries
      */
     public long getNumberOfEntries();
 
     /**
-     * This signals that the reader is done with all the entries up to
-     * "position" (included). This can potentially trigger a ledger deletion, if
-     * all the other cursors are done too with the underlying ledger.
+     * This signals that the reader is done with all the entries up to "position" (included). This can potentially
+     * trigger a ledger deletion, if all the other cursors are done too with the underlying ledger.
      * 
      * @param position
      *            the last position that have been successfully consumed
@@ -104,8 +102,39 @@ public interface ManagedCursor {
     public void asyncMarkDelete(Position position, MarkDeleteCallback callback, Object ctx);
 
     /**
-     * Get the read position. This points to the next message to be read from
-     * the cursor.
+     * Delete a single message
+     * <p>
+     * Mark a single message for deletion. When all the previous messages are all deleted, then markDelete() will be
+     * called internally to advance the persistent acknowledged position.
+     * <p>
+     * The deletion of the message is not persisted into the durable storage and cannot be recovered upon the reopening
+     * of the ManagedLedger
+     * 
+     * @param position
+     *            the position of the message to be deleted
+     */
+    public void delete(Position position) throws InterruptedException, ManagedLedgerException;
+
+    /**
+     * Delete a single message asynchronously
+     * <p>
+     * Mark a single message for deletion. When all the previous messages are all deleted, then markDelete() will be
+     * called internally to advance the persistent acknowledged position.
+     * <p>
+     * The deletion of the message is not persisted into the durable storage and cannot be recovered upon the reopening
+     * of the ManagedLedger
+     * 
+     * @param position
+     *            the position of the message to be deleted
+     * @param callback
+     *            callback object
+     * @param ctx
+     *            opaque context
+     */
+    public void asyncDelete(Position position, DeleteCallback callback, Object ctx);
+
+    /**
+     * Get the read position. This points to the next message to be read from the cursor.
      * 
      * @return the read position
      */
@@ -119,18 +148,16 @@ public interface ManagedCursor {
     public Position getMarkDeletedPosition();
 
     /**
-     * Rewind the cursor to the mark deleted position to replay all the already read but not
-     * yet mark deleted messages.
-     *
-     * The next message to be read is the one after the current mark deleted message. 
+     * Rewind the cursor to the mark deleted position to replay all the already read but not yet mark deleted messages.
+     * 
+     * The next message to be read is the one after the current mark deleted message.
      */
     public void rewind() throws ManagedLedgerException;
 
     /**
      * Advance the read position by n entries.
      * 
-     * The number of entries to be skipped must be less/equal than the total
-     * number of entries for this cursor.
+     * The number of entries to be skipped must be less/equal than the total number of entries for this cursor.
      * 
      * @param n
      *            the number of messages the cursor has to skip
@@ -140,8 +167,8 @@ public interface ManagedCursor {
     /**
      * Move the cursor to a different read position.
      * 
-     * The new position cannot be before the already mark deleted position and
-     * cannot be past the last written entry in the ManagedLedger.
+     * The new position cannot be before the already mark deleted position and cannot be past the last written entry in
+     * the ManagedLedger.
      * 
      * @param newReadPosition
      *            the position where to move the cursor

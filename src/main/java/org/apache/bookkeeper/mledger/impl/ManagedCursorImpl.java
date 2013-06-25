@@ -37,6 +37,7 @@ import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
+import org.apache.bookkeeper.mledger.AsyncCallbacks;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 import org.apache.bookkeeper.mledger.Entry;
@@ -55,6 +56,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.BoundType;
+import com.google.common.collect.Range;
+import com.google.common.collect.RangeSet;
+import com.google.common.collect.TreeRangeSet;
 import com.google.protobuf.InvalidProtocolBufferException;
 
 @ThreadSafe
@@ -71,6 +76,8 @@ class ManagedCursorImpl implements ManagedCursor {
     // Cursor ledger reference will always point to an opened ledger
     private AtomicReference<LedgerHandle> cursorLedger = new AtomicReference<LedgerHandle>();
     private AtomicReference<Version> cursorLedgerVersion = new AtomicReference<Version>();
+
+    private RangeSet<PositionImpl> individualDeletedMessages = TreeRangeSet.create();
 
     // This mutex is used to prevent mark-delete being run while we are
     // switching to a new ledger for cursor position
@@ -329,6 +336,13 @@ class ManagedCursorImpl implements ManagedCursor {
                         log.debug("[{}] Mark delete cursor {} to position {} succeeded", ledger.getName(), name,
                                 position);
                         ledgerMutex.unlockRead();
+
+                        synchronized (individualDeletedMessages) {
+                            // Remove from the individual deleted messages all the entries before the new mark delete
+                            // point.
+                            individualDeletedMessages.remove(Range.atMost(newPosition));
+                        }
+
                         ledger.updateCursor(ManagedCursorImpl.this, oldPositionFinal, (PositionImpl) position);
                         callback.markDeleteComplete(ctx);
                     }
@@ -342,6 +356,84 @@ class ManagedCursorImpl implements ManagedCursor {
                 });
             }
         });
+    }
+
+    @Override
+    public void delete(Position position) throws InterruptedException, ManagedLedgerException {
+        checkNotNull(position);
+        checkArgument(position instanceof PositionImpl);
+
+        class Result {
+            ManagedLedgerException exception = null;
+        }
+
+        final Result result = new Result();
+        final CountDownLatch counter = new CountDownLatch(1);
+
+        asyncDelete(position, new AsyncCallbacks.DeleteCallback() {
+            public void deleteComplete(Object ctx) {
+                counter.countDown();
+            }
+
+            public void deleteFailed(ManagedLedgerException exception, Object ctx) {
+                result.exception = exception;
+                counter.countDown();
+            }
+        }, null);
+
+        counter.await();
+        if (result.exception != null) {
+            throw result.exception;
+        }
+    }
+
+    @Override
+    public void asyncDelete(Position pos, final AsyncCallbacks.DeleteCallback callback, Object ctx) {
+        checkArgument(pos instanceof PositionImpl);
+
+        if (isClosed.get()) {
+            callback.deleteFailed(new ManagedLedgerException("Cursor was already closed"), ctx);
+            return;
+        }
+
+        PositionImpl position = (PositionImpl) pos;
+        Range<PositionImpl> range = null;
+
+        synchronized (individualDeletedMessages) {
+            if (individualDeletedMessages.contains(position)) {
+                throw new IllegalArgumentException("Position had already been deleted");
+            }
+
+            PositionImpl previousPosition = ledger.getPreviousPosition(position);
+            // Add a range (prev, pos] to the set. Adding the previous entry as an open limit to the range will make the
+            // RangeSet recognize the "continuity" between adjacent Positions
+            individualDeletedMessages.add(Range.openClosed(previousPosition, position));
+
+            // If the lower bound of the range set is the current mark delete position, then we can trigger a new mark
+            // delete to the upper bound of the first range segment
+            range = individualDeletedMessages.asRanges().iterator().next();
+
+            checkArgument(range.lowerBoundType() == BoundType.OPEN);
+            checkArgument(range.upperBoundType() == BoundType.CLOSED);
+            if (range.lowerEndpoint().compareTo(acknowledgedPosition.get()) <= 0) {
+                log.debug("[{}] Found a position range to mark delete for cursor {}: {} ", ledger.getName(), name,
+                        range);
+                asyncMarkDelete(range.upperEndpoint(), new MarkDeleteCallback() {
+                    public void markDeleteComplete(Object ctx) {
+                        callback.deleteComplete(ctx);
+                    }
+
+                    public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
+                        callback.deleteFailed(exception, ctx);
+                    }
+
+                }, ctx);
+            } else {
+                // No other operation can be done at this moment, the message will be markDeleted when all its previous
+                // messages are not needed anymore
+                callback.deleteComplete(ctx);
+            }
+        }
     }
 
     @Override
@@ -571,7 +663,7 @@ class ManagedCursorImpl implements ManagedCursor {
         }, null);
     }
 
-    void asyncDelete(final VoidCallback callback) {
+    void asyncDeleteCursor(final VoidCallback callback) {
         isClosed.set(true);
         ledgerMutex.lockWrite();
 
