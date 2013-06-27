@@ -79,6 +79,17 @@ public interface ManagedCursor {
     public long getNumberOfEntries();
 
     /**
+     * Return the number of non-deleted messages on this cursor.
+     * 
+     * This will also include messages that have already been read from the cursor but not deleted or mark-deleted yet.
+     * 
+     * This method has linear time complexity on the number of ledgers included in the managed ledger.
+     * 
+     * @return the number of entries
+     */
+    public long getNumberOfEntriesInBacklog();
+
+    /**
      * This signals that the reader is done with all the entries up to "position" (included). This can potentially
      * trigger a ledger deletion, if all the other cursors are done too with the underlying ledger.
      * 

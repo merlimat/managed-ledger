@@ -65,6 +65,11 @@ public class ManagedCursorContainerTest {
         }
 
         @Override
+        public long getNumberOfEntriesInBacklog() {
+            return 0;
+        }
+
+        @Override
         public void markDelete(Position position) throws ManagedLedgerException {
             this.position = position;
             container.cursorUpdated(this);

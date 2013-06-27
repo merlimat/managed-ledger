@@ -106,7 +106,7 @@ public class ManagedLedgerMBeanTest extends BookKeeperClusterTestCase {
         assertTrue(mbean.getReadEntriesRate() > 0.0);
         assertEquals(mbean.getReadEntriesSucceeded(), 1);
         assertEquals(mbean.getReadEntriesErrors(), 0);
-        assertEquals(mbean.getNumberOfMessagesInBacklog(), 0);
+        assertEquals(mbean.getNumberOfMessagesInBacklog(), 2);
     }
 
 }

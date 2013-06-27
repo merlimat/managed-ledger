@@ -249,7 +249,16 @@ class ManagedCursorImpl implements ManagedCursor {
 
     @Override
     public long getNumberOfEntries() {
-        PositionImpl fromPosition = readPosition.get();
+        return getNumberOfEntries(readPosition.get());
+    }
+
+    @Override
+    public long getNumberOfEntriesInBacklog() {
+        PositionImpl ackPosition = acknowledgedPosition.get();
+        return getNumberOfEntries(new PositionImpl(ackPosition.getLedgerId(), ackPosition.getEntryId() + 1));
+    }
+
+    private long getNumberOfEntries(PositionImpl fromPosition) {
         long allEntries = ledger.getNumberOfEntries(fromPosition);
         Range<PositionImpl> accountedEntriesRange = Range.atLeast(fromPosition);
 

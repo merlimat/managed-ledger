@@ -191,7 +191,7 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
         long count = 0;
 
         for (ManagedCursor cursor : managedLedger.getCursors()) {
-            count += cursor.getNumberOfEntries();
+            count += cursor.getNumberOfEntriesInBacklog();
         }
 
         return count;

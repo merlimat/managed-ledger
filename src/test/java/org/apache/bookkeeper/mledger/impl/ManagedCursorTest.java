@@ -1006,24 +1006,29 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(3));
         ManagedCursor cursor = ledger.openCursor("c1");
 
-        Position p1 = ledger.addEntry("entry1".getBytes());
-        Position p2 = ledger.addEntry("entry2".getBytes());
-        Position p3 = ledger.addEntry("entry3".getBytes());
-        Position p4 = ledger.addEntry("entry4".getBytes());
+        /* Position p1 = */ledger.addEntry("entry1".getBytes());
+        /* Position p2 = */ledger.addEntry("entry2".getBytes());
+        /* Position p3 = */ledger.addEntry("entry3".getBytes());
+        /* Position p4 = */ledger.addEntry("entry4".getBytes());
         Position p5 = ledger.addEntry("entry5".getBytes());
-        Position p6 = ledger.addEntry("entry6".getBytes());
+        /* Position p6 = */ledger.addEntry("entry6".getBytes());
 
         assertEquals(cursor.getNumberOfEntries(), 6);
+        assertEquals(cursor.getNumberOfEntriesInBacklog(), 6);
+
         assertEquals(cursor.readEntries(3).size(), 3);
 
         assertEquals(cursor.getNumberOfEntries(), 3);
+        assertEquals(cursor.getNumberOfEntriesInBacklog(), 6);
 
         log.info("Deleting {}", p5);
         cursor.delete(p5);
 
         assertEquals(cursor.getNumberOfEntries(), 2);
+        assertEquals(cursor.getNumberOfEntriesInBacklog(), 5);
         assertEquals(cursor.readEntries(3).size(), 2);
         assertEquals(cursor.getNumberOfEntries(), 0);
+        assertEquals(cursor.getNumberOfEntriesInBacklog(), 5);
     }
 
     @Test(timeOut = 20000)
@@ -1033,15 +1038,16 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         ManagedCursor cursor = ledger.openCursor("c1");
 
         Position p1 = ledger.addEntry("entry1".getBytes());
-        Position p2 = ledger.addEntry("entry2".getBytes());
-        Position p3 = ledger.addEntry("entry3".getBytes());
-        Position p4 = ledger.addEntry("entry4".getBytes());
+        /* Position p2 = */ledger.addEntry("entry2".getBytes());
+        /* Position p3 = */ledger.addEntry("entry3".getBytes());
+        /* Position p4 = */ledger.addEntry("entry4".getBytes());
         Position p5 = ledger.addEntry("entry5".getBytes());
         Position p6 = ledger.addEntry("entry6".getBytes());
         Position p7 = ledger.addEntry("entry7".getBytes());
         Position p8 = ledger.addEntry("entry8".getBytes());
 
         assertEquals(cursor.getNumberOfEntries(), 8);
+
         cursor.delete(p8);
         assertEquals(cursor.getNumberOfEntries(), 7);
 
