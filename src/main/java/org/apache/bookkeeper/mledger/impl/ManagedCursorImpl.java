@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -56,7 +58,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Objects;
+import com.google.common.base.Predicate;
 import com.google.common.collect.BoundType;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeSet;
 import com.google.common.collect.TreeRangeSet;
@@ -77,7 +82,8 @@ class ManagedCursorImpl implements ManagedCursor {
     private AtomicReference<LedgerHandle> cursorLedger = new AtomicReference<LedgerHandle>();
     private AtomicReference<Version> cursorLedgerVersion = new AtomicReference<Version>();
 
-    private RangeSet<PositionImpl> individualDeletedMessages = TreeRangeSet.create();
+    private final RangeSet<PositionImpl> individualDeletedMessages = TreeRangeSet.create();
+    private final ReadWriteLock deletedMessagesMutex = new ReentrantReadWriteLock();
 
     // This mutex is used to prevent mark-delete being run while we are
     // switching to a new ledger for cursor position
@@ -243,7 +249,28 @@ class ManagedCursorImpl implements ManagedCursor {
 
     @Override
     public long getNumberOfEntries() {
-        return ledger.getNumberOfEntries(readPosition.get());
+        PositionImpl fromPosition = readPosition.get();
+        long allEntries = ledger.getNumberOfEntries(fromPosition);
+        Range<PositionImpl> accountedEntriesRange = Range.atLeast(fromPosition);
+
+        long deletedEntries = 0;
+
+        deletedMessagesMutex.readLock().lock();
+        try {
+            for (Range<PositionImpl> range : individualDeletedMessages.asRanges()) {
+                if (range.isConnected(accountedEntriesRange)) {
+                    Range<PositionImpl> commonEntries = range.intersection(accountedEntriesRange);
+                    long commonCount = ledger.getNumberOfEntries(commonEntries);
+                    log.debug("[{}] [{}] Discounting {} entries for already deleted range {}", ledger.getName(), name,
+                            commonCount, commonEntries);
+                    deletedEntries += commonCount;
+                }
+            }
+        } finally {
+            deletedMessagesMutex.readLock().unlock();;
+        }
+
+        return allEntries - deletedEntries;
     }
 
     @Override
@@ -342,10 +369,13 @@ class ManagedCursorImpl implements ManagedCursor {
                                 position);
                         ledgerMutex.unlockRead();
 
-                        synchronized (individualDeletedMessages) {
-                            // Remove from the individual deleted messages all the entries before the new mark delete
-                            // point.
+                        // Remove from the individual deleted messages all the entries before the new mark delete
+                        // point.
+                        deletedMessagesMutex.writeLock().lock();
+                        try {
                             individualDeletedMessages.remove(Range.atMost(newPosition));
+                        } finally {
+                            deletedMessagesMutex.writeLock().unlock();
                         }
 
                         ledger.updateCursor(ManagedCursorImpl.this, oldPositionFinal, (PositionImpl) position);
@@ -401,10 +431,13 @@ class ManagedCursorImpl implements ManagedCursor {
             return;
         }
 
+        log.debug("[{}] [{}] Deleting single message at {}", ledger.getName(), name, pos);
+
         PositionImpl position = (PositionImpl) pos;
         Range<PositionImpl> range = null;
 
-        synchronized (individualDeletedMessages) {
+        deletedMessagesMutex.writeLock().lock();
+        try {
             if (individualDeletedMessages.contains(position)) {
                 throw new IllegalArgumentException("Position had already been deleted");
             }
@@ -413,6 +446,7 @@ class ManagedCursorImpl implements ManagedCursor {
             // Add a range (prev, pos] to the set. Adding the previous entry as an open limit to the range will make the
             // RangeSet recognize the "continuity" between adjacent Positions
             individualDeletedMessages.add(Range.openClosed(previousPosition, position));
+            log.debug("[{}] [{}] Individually deleted messages: {}", ledger.getName(), name, individualDeletedMessages);
 
             // If the lower bound of the range set is the current mark delete position, then we can trigger a new mark
             // delete to the upper bound of the first range segment
@@ -438,6 +472,45 @@ class ManagedCursorImpl implements ManagedCursor {
                 // messages are not needed anymore
                 callback.deleteComplete(ctx);
             }
+        } finally {
+            deletedMessagesMutex.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Given a list of entries, filter out the entries that have already been individually deleted.
+     * 
+     * @param entries
+     *            a list of entries
+     * @return a list of entries not containing deleted messages
+     */
+    List<Entry> filterReadEntries(List<Entry> entries) {
+        deletedMessagesMutex.readLock().lock();
+        try {
+            Range<PositionImpl> entriesRange = Range.closed((PositionImpl) entries.get(0).getPosition(),
+                    (PositionImpl) entries.get(entries.size() - 1).getPosition());
+            log.debug("[{}] [{}] Filtering entries {} - alreadyDeleted: {}", ledger.getName(), name, entriesRange,
+                    individualDeletedMessages);
+
+            if (individualDeletedMessages.isEmpty() || !entriesRange.isConnected(individualDeletedMessages.span())) {
+                // There are no individually deleted messages in this entry list, no need to perform filtering
+                log.debug("[{}] [{}] No filtering needed for entries {}", ledger.getName(), name, entriesRange);
+                return entries;
+            } else {
+                // Remove from the entry list all the entries that were already marked for deletion
+                return Lists.newArrayList(Collections2.filter(entries, new Predicate<Entry>() {
+                    public boolean apply(Entry entry) {
+                        boolean includeEntry = !individualDeletedMessages.contains((PositionImpl) entry.getPosition());
+                        if (!includeEntry) {
+                            log.debug("[{}] [{}] Filtering entry at {} - already deleted", ledger.getName(), name,
+                                    entry.getPosition());
+                        }
+                        return includeEntry;
+                    }
+                }));
+            }
+        } finally {
+            deletedMessagesMutex.readLock().unlock();
         }
     }
 

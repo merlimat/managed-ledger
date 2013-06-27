@@ -75,6 +75,7 @@ import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Range;
 
 class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, ReadCallback {
     private final static long MegaByte = 1024 * 1024;
@@ -1106,6 +1107,43 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         // Last add the entries in the current ledger
         if (state != State.ClosedLedger && currentLedger != null) {
             count += currentLedger.getLastAddConfirmed() + 1;
+        }
+
+        return count;
+    }
+
+    /**
+     * Get the number of entries between a contiguous range of two positions
+     * 
+     * @param range
+     *            the position range
+     * @return the count of entries
+     */
+    long getNumberOfEntries(Range<PositionImpl> range) {
+        checkArgument(!range.isEmpty());
+        PositionImpl fromPosition = range.lowerEndpoint();
+        PositionImpl toPosition = range.upperEndpoint();
+
+        if (fromPosition.getLedgerId() == toPosition.getLedgerId()) {
+            // If the 2 positions are in the same ledger
+            return toPosition.getEntryId() - fromPosition.getEntryId();
+        }
+
+        long count = 0;
+
+        // If the from & to are pointing to different ledgers, then we need to :
+        // 1. Add the entries in the ledger pointed by toPosition
+        count += toPosition.getEntryId() + 1;
+
+        synchronized (this) {
+            // 2. Add the entries in the ledger pointed by fromPosition
+            count += ledgers.get(fromPosition.getLedgerId()).getEntries() - fromPosition.getEntryId();
+
+            // 3. Add the whole ledgers entries in between
+            for (LedgerInfo ls : ledgers.subMap(fromPosition.getLedgerId(), false, toPosition.getLedgerId(), false)
+                    .values()) {
+                count += ls.getEntries();
+            }
         }
 
         return count;

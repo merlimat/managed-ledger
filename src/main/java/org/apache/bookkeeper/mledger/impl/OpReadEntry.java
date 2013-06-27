@@ -45,6 +45,7 @@ public class OpReadEntry {
     }
 
     void succeeded() {
+        entries = cursor.filterReadEntries(entries);
         log.debug("Read entries succeeded count={}", entries.size());
         cursor.setReadPosition(nextReadPosition);
         cursor.ledger.endReadOperationOnLedger(readPosition.getLedgerId());
