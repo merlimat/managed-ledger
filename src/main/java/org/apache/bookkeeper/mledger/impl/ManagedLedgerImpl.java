@@ -20,6 +20,7 @@ import static java.lang.Math.min;
 import java.lang.management.ManagementFactory;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Queue;
 import java.util.TreeMap;
@@ -28,6 +29,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.JMException;
@@ -91,6 +93,9 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
     AtomicLong numberOfEntries = new AtomicLong(0);
     AtomicLong totalSize = new AtomicLong(0);
+
+    // Map with reference count of read operations on each ledger
+    private final Map<Long, Long> pendingReadOperations = Maps.newTreeMap();
 
     /**
      * This lock is held while the ledgers list is updated asynchronously on the metadata store. Since we use the store
@@ -859,7 +864,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         OpReadEntry opReadEntry = (OpReadEntry) ctx;
 
         if (rc != BKException.Code.OK) {
-            log.error("[{}] Error opening ledger: {} {}", name, opReadEntry.readPosition, BKException.create(rc));
+            log.error("[{}] Error opening ledger for reading at position {} - {}", name, opReadEntry.readPosition,
+                    BKException.getMessage(rc));
             opReadEntry.failed(new ManagedLedgerException(BKException.create(rc)));
             return;
         }
@@ -906,12 +912,37 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         }
     }
 
-    void trimConsumedLedgersInBackground() {
+    synchronized PositionImpl startReadOperationOnLedger(AtomicReference<PositionImpl> positionRef) {
+        PositionImpl position = positionRef.get();
+        Long ledgerId = position.getLedgerId();
+        Long currentCount = pendingReadOperations.get(ledgerId);
+        if (currentCount == null) {
+            currentCount = new Long(0);
+        }
+
+        pendingReadOperations.put(ledgerId, currentCount + 1);
+        return position;
+    }
+
+    synchronized void endReadOperationOnLedger(long ledgerId) {
+        Long currentCount = pendingReadOperations.get(ledgerId);
+        pendingReadOperations.put(ledgerId, currentCount - 1);
+    }
+
+    private void trimConsumedLedgersInBackground() {
         executor.execute(new Runnable() {
             public void run() {
                 internalTrimConsumedLedgers();
             }
         });
+    }
+
+    private void scheduleDeferredTrimming() {
+        executor.schedule(new Runnable() {
+            public void run() {
+                internalTrimConsumedLedgers();
+            }
+        }, 100, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -944,6 +975,18 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             for (LedgerInfo ls : ledgers.headMap(slowestReaderLedgerId, false).values()) {
                 if (ls.getLedgerId() == currentLedger.getId()) {
                     break;
+                }
+
+                Long pendingReads = pendingReadOperations.get(ls.getLedgerId());
+                if (pendingReads != null && pendingReads > 0) {
+                    log.info("[{}] Aborting ledger trimming. ledger {} is still in use by {} operations", name,
+                            ls.getLedgerId(), pendingReads);
+                    trimmerMutex.unlock();
+                    scheduleDeferredTrimming();
+                    return;
+                } else {
+                    // Cleanup the pending read operations map from the ledger with the count already to 0
+                    pendingReadOperations.remove(ls.getLedgerId());
                 }
 
                 ledgersToDelete.add(ls);
@@ -985,12 +1028,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
             if (state == State.CreatingLedger) {
                 // Give up now and schedule a new trimming
-                executor.schedule(new Runnable() {
-                    public void run() {
-                        internalTrimConsumedLedgers();
-                    }
-                }, 100, TimeUnit.MILLISECONDS);
-
+                scheduleDeferredTrimming();
                 trimmerMutex.unlock();
                 return;
             }

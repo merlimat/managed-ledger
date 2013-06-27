@@ -15,6 +15,7 @@ package org.apache.bookkeeper.mledger.impl;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 import org.apache.bookkeeper.mledger.Entry;
@@ -33,29 +34,32 @@ public class OpReadEntry {
     List<Entry> entries = null;
     PositionImpl nextReadPosition;
 
-    public OpReadEntry(ManagedCursorImpl cursor, PositionImpl readPosition, int count, ReadEntriesCallback callback,
-            Object ctx) {
+    public OpReadEntry(ManagedCursorImpl cursor, AtomicReference<PositionImpl> readPositionRef, int count,
+            ReadEntriesCallback callback, Object ctx) {
+        this.readPosition = cursor.ledger.startReadOperationOnLedger(readPositionRef);
         this.cursor = cursor;
-        this.readPosition = readPosition;
         this.count = count;
         this.callback = callback;
         this.ctx = ctx;
-        this.nextReadPosition = readPosition;
+        this.nextReadPosition = this.readPosition;
     }
 
     void succeeded() {
         log.debug("Read entries succeeded count={}", entries.size());
         cursor.setReadPosition(nextReadPosition);
+        cursor.ledger.endReadOperationOnLedger(readPosition.getLedgerId());
         callback.readEntriesComplete(entries, ctx);
         cursor.ledger.mbean.addReadEntriesSample(entries);
     }
 
     void emptyResponse() {
         cursor.setReadPosition(nextReadPosition);
+        cursor.ledger.endReadOperationOnLedger(readPosition.getLedgerId());
         callback.readEntriesComplete(EmptyList, ctx);
     }
 
     void failed(ManagedLedgerException status) {
+        cursor.ledger.endReadOperationOnLedger(readPosition.getLedgerId());
         callback.readEntriesFailed(status, ctx);
         cursor.ledger.mbean.recordReadEntriesError();
     }

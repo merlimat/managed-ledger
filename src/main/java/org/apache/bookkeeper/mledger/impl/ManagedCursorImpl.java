@@ -232,7 +232,7 @@ class ManagedCursorImpl implements ManagedCursor {
             return;
         }
 
-        OpReadEntry op = new OpReadEntry(this, readPosition.get(), numberOfEntriesToRead, callback, ctx);
+        OpReadEntry op = new OpReadEntry(this, readPosition, numberOfEntriesToRead, callback, ctx);
         ledger.asyncReadEntries(op);
     }
 
@@ -282,22 +282,27 @@ class ManagedCursorImpl implements ManagedCursor {
      * @return the previous acknowledged position
      */
     PositionImpl setAcknowledgedPosition(PositionImpl newPosition) {
-        PositionImpl oldPosition = null;
+        PositionImpl currentRead = null;
         do {
-            oldPosition = acknowledgedPosition.get();
-            if (oldPosition != null && newPosition.compareTo(oldPosition) < 0) {
-                throw new IllegalArgumentException("Mark deleting an already mark-deleted position");
+            currentRead = readPosition.get();
+            if (currentRead != null && newPosition.compareTo(currentRead) < 0) {
+                // Read position is already forward the new mark-delete point
+                break;
             }
-        } while (!acknowledgedPosition.compareAndSet(oldPosition, newPosition));
 
-        PositionImpl currentRead = readPosition.get();
-        if (currentRead == null || newPosition.compareTo(currentRead) >= 0) {
             // If the position that is markdeleted is past the read position, it
             // means that the client has skipped some entries. We need to move
             // read position forward
-            readPosition.compareAndSet(currentRead,
-                    new PositionImpl(newPosition.getLedgerId(), newPosition.getEntryId() + 1));
-        }
+        } while (readPosition.compareAndSet(currentRead,
+                new PositionImpl(newPosition.getLedgerId(), newPosition.getEntryId() + 1)));
+
+        PositionImpl oldPosition = null;
+        do {
+            oldPosition = acknowledgedPosition.get();
+            if (oldPosition != null && newPosition.compareTo(oldPosition) <= 0) {
+                throw new IllegalArgumentException("Mark deleting an already mark-deleted position");
+            }
+        } while (!acknowledgedPosition.compareAndSet(oldPosition, newPosition));
 
         return oldPosition;
     }
@@ -512,7 +517,17 @@ class ManagedCursorImpl implements ManagedCursor {
     void setReadPosition(Position newReadPositionInt) {
         checkArgument(newReadPositionInt instanceof PositionImpl);
         PositionImpl newReadPosition = (PositionImpl) newReadPositionInt;
-        readPosition.set(newReadPosition);
+
+        // Make sure the read position moves monotonically forward
+        PositionImpl oldPosition = null;
+        do {
+            oldPosition = readPosition.get();
+            if (newReadPosition.compareTo(oldPosition) <= 0) {
+                // The current position is already ahead of newReadPosition,
+                // we should skip the update
+                break;
+            }
+        } while (readPosition.compareAndSet(oldPosition, newReadPosition));
     }
 
     // //////////////////////////////////////////////////
