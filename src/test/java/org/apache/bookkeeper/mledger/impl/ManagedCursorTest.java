@@ -1060,5 +1060,18 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         assertEquals(cursor.getNumberOfEntries(), 2);
     }
 
+    @Test(timeOut = 20000)
+    void testMarkDeleteTwice() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
+        ManagedCursor cursor = ledger.openCursor("c1");
+
+        Position p1 = ledger.addEntry("entry1".getBytes());
+        cursor.markDelete(p1);
+        cursor.markDelete(p1);
+
+        assertEquals(cursor.getMarkDeletedPosition(), p1);
+    }
+
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorTest.class);
 }

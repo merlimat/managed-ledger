@@ -335,7 +335,7 @@ class ManagedCursorImpl implements ManagedCursor {
         PositionImpl oldPosition = null;
         do {
             oldPosition = acknowledgedPosition.get();
-            if (oldPosition != null && newPosition.compareTo(oldPosition) <= 0) {
+            if (oldPosition != null && newPosition.compareTo(oldPosition) < 0) {
                 throw new IllegalArgumentException("Mark deleting an already mark-deleted position");
             }
         } while (!acknowledgedPosition.compareAndSet(oldPosition, newPosition));
