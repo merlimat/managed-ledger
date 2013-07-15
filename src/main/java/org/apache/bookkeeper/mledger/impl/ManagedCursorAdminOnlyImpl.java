@@ -44,18 +44,18 @@ public class ManagedCursorAdminOnlyImpl extends ManagedCursorImpl {
     }
 
     @Override
-    public void rewind() throws ManagedLedgerException {
-        throw exception();
+    public void rewind() {
+        throw new RuntimeException(exception());
     }
 
     @Override
-    public void skip(int entries) throws ManagedLedgerException {
-        throw exception();
+    public void skip(int entries) {
+        throw new RuntimeException(exception());
     }
 
     @Override
-    public void seek(Position newReadPositionInt) throws ManagedLedgerException {
-        throw exception();
+    public void seek(Position newReadPositionInt) {
+        throw new RuntimeException(exception());
     }
 
     private ManagedLedgerException exception() {

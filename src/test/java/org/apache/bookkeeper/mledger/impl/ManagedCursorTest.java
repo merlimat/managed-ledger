@@ -858,21 +858,21 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         try {
             c1.skip(1);
             fail("read-only mode");
-        } catch (ManagedLedgerException e) {
+        } catch (RuntimeException e) {
             // ok
         }
 
         try {
             c1.rewind();
             fail("read-only mode");
-        } catch (ManagedLedgerException e) {
+        } catch (RuntimeException e) {
             // ok
         }
 
         try {
             c1.seek(p1);
             fail("read-only mode");
-        } catch (ManagedLedgerException e) {
+        } catch (RuntimeException e) {
             // ok
         }
 

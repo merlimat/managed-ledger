@@ -163,7 +163,7 @@ public interface ManagedCursor {
      * 
      * The next message to be read is the one after the current mark deleted message.
      */
-    public void rewind() throws ManagedLedgerException;
+    public void rewind();
 
     /**
      * Advance the read position by n entries.
@@ -173,7 +173,7 @@ public interface ManagedCursor {
      * @param n
      *            the number of messages the cursor has to skip
      */
-    public void skip(int n) throws ManagedLedgerException;
+    public void skip(int n);
 
     /**
      * Move the cursor to a different read position.
@@ -184,7 +184,7 @@ public interface ManagedCursor {
      * @param newReadPosition
      *            the position where to move the cursor
      */
-    public void seek(Position newReadPosition) throws ManagedLedgerException;
+    public void seek(Position newReadPosition);
 
     /**
      * Close the cursor and releases the associated resources.

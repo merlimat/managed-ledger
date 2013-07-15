@@ -545,13 +545,13 @@ class ManagedCursorImpl implements ManagedCursor {
     }
 
     @Override
-    public void skip(int entries) throws ManagedLedgerException {
+    public void skip(int entries) {
         checkArgument(entries > 0);
         readPosition.set(ledger.skipEntries(readPosition.get(), entries));
     }
 
     @Override
-    public void rewind() throws ManagedLedgerException {
+    public void rewind() {
         // The acked position can possibly be modified before we reset the read position. We need to make sure that this
         // doesn't happen.
         PositionImpl markDeleted;
@@ -562,7 +562,7 @@ class ManagedCursorImpl implements ManagedCursor {
     }
 
     @Override
-    public void seek(Position newReadPositionInt) throws ManagedLedgerException {
+    public void seek(Position newReadPositionInt) {
         checkArgument(newReadPositionInt instanceof PositionImpl);
         PositionImpl newReadPosition = (PositionImpl) newReadPositionInt;
         checkArgument(newReadPosition.compareTo(acknowledgedPosition.get()) > 0,

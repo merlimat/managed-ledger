@@ -100,7 +100,7 @@ public class ManagedCursorContainerTest {
         }
 
         @Override
-        public void rewind() throws ManagedLedgerException {
+        public void rewind() {
         }
 
         @Override
