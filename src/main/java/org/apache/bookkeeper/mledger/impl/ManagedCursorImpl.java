@@ -40,6 +40,7 @@ import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.mledger.AsyncCallbacks;
+import org.apache.bookkeeper.mledger.AsyncCallbacks.ClearBacklogCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 import org.apache.bookkeeper.mledger.Entry;
@@ -276,7 +277,7 @@ class ManagedCursorImpl implements ManagedCursor {
                 }
             }
         } finally {
-            deletedMessagesMutex.readLock().unlock();;
+            deletedMessagesMutex.readLock().unlock();
         }
 
         return allEntries - deletedEntries;
@@ -309,6 +310,51 @@ class ManagedCursorImpl implements ManagedCursor {
         if (result.exception != null) {
             throw result.exception;
         }
+    }
+
+    @Override
+    public void clearBacklog() throws InterruptedException, ManagedLedgerException {
+        class Result {
+            ManagedLedgerException exception = null;
+        }
+
+        final Result result = new Result();
+        final CountDownLatch counter = new CountDownLatch(1);
+
+        asyncClearBacklog(new ClearBacklogCallback() {
+            public void clearBacklogComplete(Object ctx) {
+                counter.countDown();
+            }
+
+            public void clearBacklogFailed(ManagedLedgerException exception, Object ctx) {
+                result.exception = exception;
+                counter.countDown();
+            }
+        }, null);
+
+        counter.await();
+        if (result.exception != null) {
+            throw result.exception;
+        }
+    }
+
+    @Override
+    public void asyncClearBacklog(final ClearBacklogCallback callback, Object ctx) {
+        asyncMarkDelete(ledger.getLastPosition(), new MarkDeleteCallback() {
+            public void markDeleteComplete(Object ctx) {
+                callback.clearBacklogComplete(ctx);
+            }
+
+            public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
+                if (exception.getCause() instanceof IllegalArgumentException) {
+                    // There could be a race condition between calling clear backlog and other mark delete operations.
+                    // If we get an exception it means the backlog was already cleared in the meantime.
+                    callback.clearBacklogComplete(ctx);
+                } else {
+                    callback.clearBacklogFailed(exception, ctx);
+                }
+            }
+        }, ctx);
     }
 
     /**
@@ -448,7 +494,8 @@ class ManagedCursorImpl implements ManagedCursor {
         deletedMessagesMutex.writeLock().lock();
         try {
             if (individualDeletedMessages.contains(position)) {
-                throw new IllegalArgumentException("Position had already been deleted");
+                callback.deleteFailed(new ManagedLedgerException(new IllegalArgumentException(
+                        "Position had already been deleted")), ctx);
             }
 
             PositionImpl previousPosition = ledger.getPreviousPosition(position);
@@ -542,12 +589,6 @@ class ManagedCursorImpl implements ManagedCursor {
     @Override
     public Position getMarkDeletedPosition() {
         return acknowledgedPosition.get();
-    }
-
-    @Override
-    public void skip(int entries) {
-        checkArgument(entries > 0);
-        readPosition.set(ledger.skipEntries(readPosition.get(), entries));
     }
 
     @Override

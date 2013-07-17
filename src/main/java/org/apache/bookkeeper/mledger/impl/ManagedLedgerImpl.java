@@ -57,6 +57,7 @@ import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerException.ManagedLedgerFencedException;
 import org.apache.bookkeeper.mledger.ManagedLedgerException.MetaStoreException;
+import org.apache.bookkeeper.mledger.ManagedLedgerMXBean;
 import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.mledger.impl.ManagedCursorImpl.VoidCallback;
 import org.apache.bookkeeper.mledger.impl.MetaStore.MetaStoreCallback;
@@ -876,6 +877,11 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         internalReadFromLedger(ledger, opReadEntry);
     }
 
+    @Override
+    public ManagedLedgerMXBean getStats() {
+        return mbean;
+    }
+
     synchronized boolean hasMoreEntries(PositionImpl position) {
         if (position.getLedgerId() == currentLedger.getId()) {
             // If we are reading from the last ledger, use the
@@ -1150,40 +1156,6 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     }
 
     /**
-     * Skip a specified number of entries and return the resulting position.
-     * 
-     * @param startPosition
-     *            the current position
-     * @param entriesToSkip
-     *            the numbers of entries to skip
-     * @return the new position
-     */
-    synchronized PositionImpl skipEntries(PositionImpl startPosition, int entriesToSkip) {
-        log.debug("[{}] Skipping {} entries from position {}", name, entriesToSkip, startPosition);
-        long ledgerId = startPosition.getLedgerId();
-        entriesToSkip += startPosition.getEntryId();
-
-        while (entriesToSkip > 0) {
-            if (ledgerId == currentLedger.getId()) {
-                checkArgument(entriesToSkip <= (currentLedger.getLastAddConfirmed() + 1));
-                return new PositionImpl(ledgerId, entriesToSkip);
-            } else {
-                LedgerInfo ledger = ledgers.get(ledgerId);
-
-                if (entriesToSkip < ledger.getEntries()) {
-                    return new PositionImpl(ledgerId, entriesToSkip);
-                } else {
-                    // Move to next ledger
-                    entriesToSkip -= ledger.getEntries();
-                    ledgerId = ledgers.ceilingKey(ledgerId + 1);
-                }
-            }
-        }
-
-        return new PositionImpl(ledgerId, 0);
-    }
-
-    /**
      * Get the entry position that come before the specified position in the message stream, using information from the
      * ledger list and each ledger entries count.
      * 
@@ -1236,6 +1208,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
             return position.getEntryId() <= ls.getEntries();
         }
+    }
+
+    synchronized Position getLastPosition() {
+        return new PositionImpl(currentLedger.getId(), currentLedger.getLastAddConfirmed());
     }
 
     private boolean currentLedgerIsFull() {

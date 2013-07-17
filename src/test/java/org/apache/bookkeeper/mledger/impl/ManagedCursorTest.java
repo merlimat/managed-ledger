@@ -285,78 +285,6 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
     }
 
     @Test(timeOut = 20000)
-    void skipEntries() throws Exception {
-        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
-        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(1));
-        ManagedCursor cursor = ledger.openCursor("c1");
-        ledger.addEntry("dummy-entry-1".getBytes(Encoding));
-
-        log.info("ok1");
-        assertEquals(cursor.getNumberOfEntries(), 1);
-        cursor.skip(1);
-        log.info("ok2");
-        assertEquals(cursor.getNumberOfEntries(), 0);
-
-        log.info("ok3");
-        ledger.addEntry("dummy-entry-2".getBytes(Encoding));
-        log.info("ok4");
-        ledger.addEntry("dummy-entry-3".getBytes(Encoding));
-        log.info("ok5");
-        ledger.addEntry("dummy-entry-4".getBytes(Encoding));
-        log.info("ok6");
-
-        assertEquals(cursor.getNumberOfEntries(), 3);
-        cursor.skip(2);
-        assertEquals(cursor.getNumberOfEntries(), 1);
-        List<Entry> entries = cursor.readEntries(10);
-        assertEquals(entries.size(), 1);
-    }
-
-    @Test(timeOut = 20000)
-    void skipEntries2() throws Exception {
-        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
-        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
-        ManagedCursor cursor = ledger.openCursor("c1");
-        ledger.addEntry("dummy-entry-1".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-2".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-3".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-4".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-5".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-6".getBytes(Encoding));
-
-        cursor.readEntries(2);
-        cursor.skip(1);
-        assertEquals(cursor.getNumberOfEntries(), 3);
-
-        try {
-            cursor.skip(4);
-            fail("should have failed");
-        } catch (IllegalArgumentException e) {
-            // ok
-        }
-
-        cursor.skip(3);
-
-        try {
-            cursor.skip(1);
-            fail("should have failed");
-        } catch (IllegalArgumentException e) {
-            // ok
-        }
-    }
-
-    @Test(expectedExceptions = IllegalArgumentException.class)
-    void skipEntriesError() throws Exception {
-        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
-        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(1));
-        ManagedCursor cursor = ledger.openCursor("c1");
-        ledger.addEntry("dummy-entry-1".getBytes(Encoding));
-
-        assertEquals(cursor.getNumberOfEntries(), 1);
-        cursor.skip(-1);
-    }
-
-    @Test(timeOut = 20000)
     void seekPosition() throws Exception {
         ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
         ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(10));
@@ -856,13 +784,6 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         }
 
         try {
-            c1.skip(1);
-            fail("read-only mode");
-        } catch (RuntimeException e) {
-            // ok
-        }
-
-        try {
             c1.rewind();
             fail("read-only mode");
         } catch (RuntimeException e) {
@@ -982,7 +903,7 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         try {
             cursor.delete(p3);
             fail("already deleted");
-        } catch (IllegalArgumentException e) {
+        } catch (ManagedLedgerException e) {
             // ok
         }
 
@@ -1071,6 +992,53 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         cursor.markDelete(p1);
 
         assertEquals(cursor.getMarkDeletedPosition(), p1);
+    }
+
+    @Test(timeOut = 20000)
+    void testClearBacklog() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(1));
+
+        ManagedCursor c1 = ledger.openCursor("c1");
+        ledger.addEntry("dummy-entry-1".getBytes(Encoding));
+        ManagedCursor c2 = ledger.openCursor("c2");
+        ledger.addEntry("dummy-entry-2".getBytes(Encoding));
+        ManagedCursor c3 = ledger.openCursor("c3");
+        ledger.addEntry("dummy-entry-3".getBytes(Encoding));
+
+        c1.clearBacklog();
+        c3.clearBacklog();
+
+        assertEquals(c1.getNumberOfEntriesInBacklog(), 0);
+        assertEquals(c1.getNumberOfEntries(), 0);
+        assertEquals(c1.hasMoreEntries(), false);
+
+        assertEquals(c2.getNumberOfEntriesInBacklog(), 2);
+        assertEquals(c2.getNumberOfEntries(), 2);
+        assertEquals(c2.hasMoreEntries(), true);
+
+        assertEquals(c3.getNumberOfEntriesInBacklog(), 0);
+        assertEquals(c3.getNumberOfEntries(), 0);
+        assertEquals(c3.hasMoreEntries(), false);
+
+        factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(1));
+
+        c1 = ledger.openCursor("c1");
+        c2 = ledger.openCursor("c2");
+        c3 = ledger.openCursor("c3");
+
+        assertEquals(c1.getNumberOfEntriesInBacklog(), 0);
+        assertEquals(c1.getNumberOfEntries(), 0);
+        assertEquals(c1.hasMoreEntries(), false);
+
+        assertEquals(c2.getNumberOfEntriesInBacklog(), 2);
+        assertEquals(c2.getNumberOfEntries(), 2);
+        assertEquals(c2.hasMoreEntries(), true);
+
+        assertEquals(c3.getNumberOfEntriesInBacklog(), 0);
+        assertEquals(c3.getNumberOfEntries(), 0);
+        assertEquals(c3.hasMoreEntries(), false);
     }
 
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorTest.class);

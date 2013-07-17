@@ -15,6 +15,7 @@ package org.apache.bookkeeper.mledger;
 
 import java.util.List;
 
+import org.apache.bookkeeper.mledger.AsyncCallbacks.ClearBacklogCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
@@ -166,16 +167,6 @@ public interface ManagedCursor {
     public void rewind();
 
     /**
-     * Advance the read position by n entries.
-     * 
-     * The number of entries to be skipped must be less/equal than the total number of entries for this cursor.
-     * 
-     * @param n
-     *            the number of messages the cursor has to skip
-     */
-    public void skip(int n);
-
-    /**
      * Move the cursor to a different read position.
      * 
      * The new position cannot be before the already mark deleted position and cannot be past the last written entry in
@@ -185,6 +176,25 @@ public interface ManagedCursor {
      *            the position where to move the cursor
      */
     public void seek(Position newReadPosition);
+
+    /**
+     * Clear the cursor backlog.
+     * 
+     * Consume all the entries for this cursor.
+     */
+    public void clearBacklog() throws InterruptedException, ManagedLedgerException;
+
+    /**
+     * Clear the cursor backlog.
+     * 
+     * Consume all the entries for this cursor.
+     * 
+     * @param callback
+     *            callback object
+     * @param ctx
+     *            opaque context
+     */
+    public void asyncClearBacklog(ClearBacklogCallback callback, Object ctx);
 
     /**
      * Close the cursor and releases the associated resources.

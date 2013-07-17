@@ -49,11 +49,6 @@ public class ManagedCursorAdminOnlyImpl extends ManagedCursorImpl {
     }
 
     @Override
-    public void skip(int entries) {
-        throw new RuntimeException(exception());
-    }
-
-    @Override
     public void seek(Position newReadPositionInt) {
         throw new RuntimeException(exception());
     }

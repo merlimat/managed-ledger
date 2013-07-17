@@ -84,6 +84,8 @@ public interface ManagedLedgerMXBean {
 
     double getAddEntryLatencyMax();
 
+    double getAddEntryLatencyAverage();
+
     long[] getAddEntryLatencyBuckets();
 
 }

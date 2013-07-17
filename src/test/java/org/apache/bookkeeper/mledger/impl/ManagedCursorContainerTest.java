@@ -18,6 +18,7 @@ import static org.testng.Assert.fail;
 
 import java.util.List;
 
+import org.apache.bookkeeper.mledger.AsyncCallbacks.ClearBacklogCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.DeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.MarkDeleteCallback;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
@@ -104,10 +105,6 @@ public class ManagedCursorContainerTest {
         }
 
         @Override
-        public void skip(int messages) {
-        }
-
-        @Override
         public void seek(Position newReadPosition) {
         }
 
@@ -121,6 +118,14 @@ public class ManagedCursorContainerTest {
 
         @Override
         public void asyncDelete(Position position, DeleteCallback callback, Object ctx) {
+        }
+
+        @Override
+        public void clearBacklog() throws InterruptedException, ManagedLedgerException {
+        }
+
+        @Override
+        public void asyncClearBacklog(ClearBacklogCallback callback, Object ctx) {
         }
 
     }

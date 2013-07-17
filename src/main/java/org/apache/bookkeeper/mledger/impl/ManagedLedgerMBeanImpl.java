@@ -177,6 +177,11 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
     }
 
     @Override
+    public double getAddEntryLatencyAverage() {
+        return lastCompletedPeriod.get().addEntryLatencyStatsMs.getAvg();
+    }
+
+    @Override
     public long[] getAddEntryLatencyBuckets() {
         return lastCompletedPeriod.get().addEntryLatencyStatsMs.getBuckets();
     }

@@ -179,4 +179,9 @@ public interface ManagedLedger {
      *            opaque context
      */
     public void asyncClose(CloseCallback callback, Object ctx);
+
+    /**
+     * @return the managed ledger stats MBean
+     */
+    public ManagedLedgerMXBean getStats();
 }
