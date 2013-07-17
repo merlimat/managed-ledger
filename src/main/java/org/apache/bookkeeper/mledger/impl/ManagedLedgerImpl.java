@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.management.InstanceAlreadyExistsException;
 import javax.management.JMException;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
@@ -183,7 +182,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             mbeanObjectName = new ObjectName("org.apache.bookkeeper.mledger:type=ManagedLedger,factory="
                     + factory.hashCode() + ",name=" + ObjectName.quote(name));
         } catch (MalformedObjectNameException e) {
-            log.error("Error in creating JMX Object name for {}", name);
+            log.error("Error in creating JMX Object name for {}", name, e);
             callback.initializeFailed(new ManagedLedgerException(e));
             return;
         }
@@ -191,8 +190,6 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         try {
             mBeanServer.registerMBean(mbean, mbeanObjectName);
             callback.initializeComplete();
-        } catch (InstanceAlreadyExistsException e) {
-
         } catch (JMException e) {
             log.error("Failed to register ManagedLedger MBean", e);
             callback.initializeFailed(new ManagedLedgerException(e));
@@ -201,7 +198,9 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
     private void unregisterMBean() {
         try {
-            ManagementFactory.getPlatformMBeanServer().unregisterMBean(mbeanObjectName);
+            if (mbeanObjectName != null) {
+                ManagementFactory.getPlatformMBeanServer().unregisterMBean(mbeanObjectName);
+            }
         } catch (Exception e) {
             log.error("[{}] Error unregistering mbean", name, e);
         }
