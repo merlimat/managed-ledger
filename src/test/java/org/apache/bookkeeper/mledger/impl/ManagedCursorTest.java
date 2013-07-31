@@ -321,12 +321,21 @@ public class ManagedCursorTest extends BookKeeperClusterTestCase {
         ledger.addEntry("dummy-entry-2".getBytes(Encoding));
         ledger.addEntry("dummy-entry-3".getBytes(Encoding));
         PositionImpl seekPosition = (PositionImpl) ledger.addEntry("dummy-entry-4".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-5".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-6".getBytes(Encoding));
+        Position entry5 = ledger.addEntry("dummy-entry-5".getBytes(Encoding));
+        Position entry6 = ledger.addEntry("dummy-entry-6".getBytes(Encoding));
 
         cursor.seek(new PositionImpl(seekPosition.getLedgerId(), seekPosition.getEntryId()));
 
         assertEquals(cursor.getReadPosition(), seekPosition);
+        List<Entry> entries = cursor.readEntries(1);
+        assertEquals(entries.size(), 1);
+        assertEquals(new String(entries.get(0).getData(), Encoding), "dummy-entry-4");
+
+        cursor.seek(entry5.getNext());
+        assertEquals(cursor.getReadPosition(), entry6);
+        entries = cursor.readEntries(1);
+        assertEquals(entries.size(), 1);
+        assertEquals(new String(entries.get(0).getData(), Encoding), "dummy-entry-6");
     }
 
     @Test

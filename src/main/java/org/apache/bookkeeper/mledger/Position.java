@@ -20,5 +20,11 @@ import com.google.common.annotations.Beta;
  */
 @Beta
 public interface Position {
-
+    /**
+     * Get the position of the entry next to this one. The returned position might point to a non-existing, or not-yet
+     * existing entry
+     * 
+     * @return the position of the next logical entry
+     */
+    Position getNext();
 }

@@ -44,6 +44,11 @@ public class PositionImpl implements Position, Comparable<PositionImpl> {
         return entryId;
     }
 
+    @Override
+    public PositionImpl getNext() {
+        return new PositionImpl(ledgerId, entryId + 1);
+    }
+
     /**
      * String representation of virtual cursor - LedgerId:EntryId
      */
