@@ -19,14 +19,14 @@ import java.util.Enumeration;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
-import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
 import com.google.common.base.Charsets;
 
-public class SimpleBookKeeperTest extends BookKeeperClusterTestCase {
+public class SimpleBookKeeperTest extends MockedBookKeeperTestCase {
 
     private static final String SECRET = "secret";
     private static final Charset Encoding = Charsets.UTF_8;

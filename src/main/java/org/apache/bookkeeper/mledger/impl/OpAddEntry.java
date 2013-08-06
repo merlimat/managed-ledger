@@ -91,7 +91,6 @@ class OpAddEntry implements AddCallback, CloseCallback {
             ManagedLedgerException status = new ManagedLedgerFencedException(BKException.create(rc));
             ml.setFenced();
             ml.mbean.recordAddEntryError();
-            ml.ledgerClosed(lh, status);
             callback.addFailed(status, ctx);
         } else {
             ManagedLedgerException status = new ManagedLedgerException(BKException.create(rc));

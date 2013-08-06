@@ -28,11 +28,11 @@ import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
 import org.apache.bookkeeper.mledger.Position;
-import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.apache.zookeeper.KeeperException.Code;
 import org.testng.annotations.Test;
 
-public class ManagedLedgerErrorsTest extends BookKeeperClusterTestCase {
+public class ManagedLedgerErrorsTest extends MockedBookKeeperTestCase {
 
     @Test
     public void removingCursor() throws Exception {

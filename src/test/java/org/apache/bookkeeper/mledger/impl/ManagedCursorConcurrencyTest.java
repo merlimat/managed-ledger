@@ -14,12 +14,12 @@ import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
 import org.apache.bookkeeper.mledger.Position;
-import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.testng.annotations.Test;
 
 import com.google.common.collect.Lists;
 
-public class ManagedCursorConcurrencyTest extends BookKeeperClusterTestCase {
+public class ManagedCursorConcurrencyTest extends MockedBookKeeperTestCase {
 
     Executor executor = Executors.newCachedThreadPool();
 

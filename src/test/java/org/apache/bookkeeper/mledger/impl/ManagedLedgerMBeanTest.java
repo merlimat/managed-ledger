@@ -22,10 +22,10 @@ import java.util.List;
 import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
-import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.testng.annotations.Test;
 
-public class ManagedLedgerMBeanTest extends BookKeeperClusterTestCase {
+public class ManagedLedgerMBeanTest extends MockedBookKeeperTestCase {
     
     private void waitForRefresh(ManagedLedgerMBeanImpl mbean) {
         try {

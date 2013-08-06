@@ -25,13 +25,13 @@ import org.apache.bookkeeper.mledger.impl.MetaStore.Version;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.ManagedCursorInfo;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats.ManagedLedgerInfo;
-import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.ZooDefs;
 import org.testng.annotations.Test;
 
-public class MetaStoreImplZookeeperTest extends BookKeeperClusterTestCase {
+public class MetaStoreImplZookeeperTest extends MockedBookKeeperTestCase {
 
     @Test
     void getMLList() throws Exception {
