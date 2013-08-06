@@ -89,7 +89,12 @@ public class MockLedgerHandle extends LedgerHandle {
 
     @Override
     public long addEntry(byte[] data) throws InterruptedException, BKException {
-        bk.checkProgrammedFail();
+        try {
+            bk.checkProgrammedFail();
+        } catch (BKException e) {
+            fenced = true;
+            throw e;
+        }
 
         if (fenced) {
             throw BKException.create(BKException.Code.LedgerFencedException);
@@ -109,6 +114,7 @@ public class MockLedgerHandle extends LedgerHandle {
         bk.executor.execute(new Runnable() {
             public void run() {
                 if (bk.getProgrammedFailStatus()) {
+                    fenced = true;
                     cb.addComplete(bk.failReturnCode, MockLedgerHandle.this, INVALID_ENTRY_ID, ctx);
                     return;
                 }

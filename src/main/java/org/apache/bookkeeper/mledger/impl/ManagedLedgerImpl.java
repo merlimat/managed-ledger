@@ -664,15 +664,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             ManagedLedgerException status = new ManagedLedgerException(BKException.create(rc));
 
             // Empty the list of pending requests and make all of them fail
-            while (true) {
-                OpAddEntry op = pendingAddEntries.poll();
-                if (op != null) {
-                    op.failed(status);
-                    continue;
-                } else {
-                    break;
-                }
-            }
+            clearPendingAddEntries(status);
         } else {
             log.debug("[{}] Successfully created new ledger {}", name, lh.getId());
             ledgers.put(lh.getId(), LedgerInfo.newBuilder().setLedgerId(lh.getId()).build());
@@ -693,15 +685,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
                     ledgersListMutex.unlock();
 
                     synchronized (ManagedLedgerImpl.this) {
-                        while (true) {
-                            OpAddEntry op = pendingAddEntries.poll();
-                            if (op != null) {
-                                op.failed(e);
-                                continue;
-                            } else {
-                                break;
-                            }
-                        }
+                        clearPendingAddEntries(e);
                     }
                 }
             };
@@ -743,7 +727,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     // //////////////////////////////////////////////////////////////////////
     // Private helpers
 
-    synchronized void ledgerClosed(LedgerHandle lh) {
+    synchronized void ledgerClosed(LedgerHandle lh, ManagedLedgerException exception) {
         checkArgument(lh.getId() == currentLedger.getId());
         state = State.ClosedLedger;
 
@@ -755,11 +739,28 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         trimConsumedLedgersInBackground();
 
         if (!pendingAddEntries.isEmpty()) {
-            // Need to create a new ledger to write pending entries
-            log.debug("[{}] Creating a new ledger", name);
-            state = State.CreatingLedger;
-            bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getWriteQuorumSize(),
-                    config.getAckQuorumSize(), config.getDigestType(), config.getPassword(), this, null);
+            if (exception != null) {
+                // The ledger was closed because of an error, we need to ack the error to all pending addEntry
+                // operations
+                clearPendingAddEntries(exception);
+            } else {
+                // Need to create a new ledger to write pending entries
+                log.debug("[{}] Creating a new ledger", name);
+                state = State.CreatingLedger;
+                bookKeeper.asyncCreateLedger(config.getEnsembleSize(), config.getWriteQuorumSize(),
+                        config.getAckQuorumSize(), config.getDigestType(), config.getPassword(), this, null);
+            }
+        }
+    }
+
+    void clearPendingAddEntries(ManagedLedgerException e) {
+        while (true) {
+            OpAddEntry op = pendingAddEntries.poll();
+            if (op == null) {
+                break;
+            }
+
+            op.failed(e);
         }
     }
 

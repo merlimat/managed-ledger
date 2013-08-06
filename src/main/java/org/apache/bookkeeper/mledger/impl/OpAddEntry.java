@@ -91,10 +91,12 @@ class OpAddEntry implements AddCallback, CloseCallback {
             ManagedLedgerException status = new ManagedLedgerFencedException(BKException.create(rc));
             ml.setFenced();
             ml.mbean.recordAddEntryError();
+            ml.ledgerClosed(lh, status);
             callback.addFailed(status, ctx);
         } else {
             ManagedLedgerException status = new ManagedLedgerException(BKException.create(rc));
             ml.mbean.recordAddEntryError();
+            ml.ledgerClosed(lh, status);
             callback.addFailed(status, ctx);
         }
     }
@@ -109,7 +111,7 @@ class OpAddEntry implements AddCallback, CloseCallback {
             log.warn("Error when closing ledger {}. Status={}", lh.getId(), BKException.getMessage(rc));
         }
 
-        ml.ledgerClosed(lh);
+        ml.ledgerClosed(lh, null);
         updateLatency();
         callback.addComplete(new PositionImpl(lh.getId(), entryId), ctx);
     }

@@ -297,7 +297,7 @@ public class ManagedLedgerErrorsTest extends BookKeeperClusterTestCase {
         }
     }
 
-    @Test(timeOut = 20000, invocationCount=1, skipFailedInvocations=true)
+    @Test(timeOut = 20000, invocationCount = 1, skipFailedInvocations = true)
     public void errorInUpdatingLedgersList() throws Exception {
         ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, zkc);
         ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(1));
@@ -315,7 +315,7 @@ public class ManagedLedgerErrorsTest extends BookKeeperClusterTestCase {
                 // ok
             }
         }, null);
-        
+
         ledger.asyncAddEntry("entry".getBytes(), new AddEntryCallback() {
             public void addFailed(ManagedLedgerException exception, Object ctx) {
                 latch.countDown();
@@ -327,5 +327,46 @@ public class ManagedLedgerErrorsTest extends BookKeeperClusterTestCase {
         }, null);
 
         latch.await();
+    }
+
+    @Test
+    public void recoverAfterWriteError() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, zkc);
+        ManagedLedger ledger = factory.open("my_test_ledger");
+
+        bkc.failNow(BKException.Code.BookieHandleNotAvailableException);
+
+        try {
+            ledger.addEntry("entry".getBytes());
+            fail("should fail");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        // Next add should succeed
+        ledger.addEntry("entry".getBytes());
+    }
+
+    @Test
+    public void recoverAfterMarkDeleteError() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, zkc);
+        ManagedLedger ledger = factory.open("my_test_ledger");
+        ManagedCursor cursor = ledger.openCursor("my-cursor");
+        Position position = ledger.addEntry("entry".getBytes());
+
+        bkc.failNow(BKException.Code.BookieHandleNotAvailableException);
+
+        try {
+            cursor.markDelete(position);
+            fail("should fail");
+        } catch (ManagedLedgerException e) {
+            // ok
+        }
+
+        // The metadata ledger is reopened in background, until it's not reopened the mark-delete will fail
+        Thread.sleep(100);
+
+        // Next markDelete should succeed
+        cursor.markDelete(position);
     }
 }
