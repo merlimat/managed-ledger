@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -1291,6 +1293,51 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         assertEquals(ledger.getPreviousPosition((PositionImpl) p2), p1);
         assertEquals(ledger.getPreviousPosition((PositionImpl) p3), p2);
         assertEquals(ledger.getPreviousPosition((PositionImpl) p4), p3);
+    }
+
+    /**
+     * Reproduce a race condition between opening cursors and concurrent mark delete operations
+     */
+    @Test(timeOut = 20000)
+    public void testOpenRaceCondition() throws Exception {
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, zkc);
+        ManagedLedgerConfig config = new ManagedLedgerConfig();
+        config.setEnsembleSize(2).setAckQuorumSize(2).setMetadataEnsembleSize(2);
+        final ManagedLedger ledger = factory.open("my-ledger", config);
+        final ManagedCursor c1 = ledger.openCursor("c1");
+
+        final int N = 1000;
+        final Position position = ledger.addEntry("entry-0".getBytes());
+        Executor executor = Executors.newCachedThreadPool();
+        final CountDownLatch counter = new CountDownLatch(2);
+        executor.execute(new Runnable() {
+            public void run() {
+                try {
+                    for (int i = 0; i < N; i++) {
+                        c1.markDelete(position);
+                    }
+                    counter.countDown();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        executor.execute(new Runnable() {
+            public void run() {
+                try {
+                    for (int i = 0; i < N; i++) {
+                        ledger.openCursor("cursor-" + i);
+                    }
+                    counter.countDown();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
+        // If there is the race condition, this method will not complete triggering the test timeout
+        counter.await();
     }
 
 }

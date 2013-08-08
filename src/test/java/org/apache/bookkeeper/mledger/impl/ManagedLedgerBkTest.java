@@ -21,9 +21,6 @@
 package org.apache.bookkeeper.mledger.impl;
 
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 import org.apache.bookkeeper.client.BookKeeperTestClient;
 import org.apache.bookkeeper.mledger.Entry;
@@ -32,7 +29,6 @@ import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
-import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import org.testng.annotations.Test;
 
@@ -95,48 +91,5 @@ public class ManagedLedgerBkTest extends BookKeeperClusterTestCase {
         entries = cursor.readEntries(1);
         assertEquals(1, entries.size());
         assertEquals("entry-2", new String(entries.get(0).getData()));
-    }
-
-    /**
-     * Reproduce a race condition between opening cursors and concurrent mark delete operations
-     */
-    @Test(timeOut = 20000)
-    public void testRaceCondition() throws Exception {
-        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, zkc);
-        ManagedLedgerConfig config = new ManagedLedgerConfig();
-        config.setEnsembleSize(2).setAckQuorumSize(2).setMetadataEnsembleSize(2);
-        final ManagedLedger ledger = factory.open("my-ledger", config);
-        final ManagedCursor c1 = ledger.openCursor("c1");
-
-        final int N = 1000;
-        final Position position = ledger.addEntry("entry-0".getBytes());
-        Executor executor = Executors.newCachedThreadPool();
-        final CountDownLatch counter = new CountDownLatch(2);
-        executor.execute(new Runnable() {
-            public void run() {
-                try {
-                    for (int i = 0; i < N; i++) {
-                        c1.markDelete(position);
-                    }
-                    counter.countDown();
-                } catch (Exception e) {
-                }
-            }
-        });
-
-        executor.execute(new Runnable() {
-            public void run() {
-                try {
-                    for (int i = 0; i < N; i++) {
-                        ledger.openCursor("cursor-" + i);
-                    }
-                    counter.countDown();
-                } catch (Exception e) {
-                }
-            }
-        });
-
-        // If there is the race condition, this method will not complete triggering the test timeout
-        counter.await();
     }
 }
