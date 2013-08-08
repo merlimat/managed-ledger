@@ -455,7 +455,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
     }
 
     @Override
-    public synchronized ManagedCursor openCursor(String cursorName) throws InterruptedException, ManagedLedgerException {
+    public ManagedCursor openCursor(String cursorName) throws InterruptedException, ManagedLedgerException {
         final CountDownLatch counter = new CountDownLatch(1);
         class Result {
             ManagedCursor cursor = null;
@@ -509,7 +509,9 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         cursor.initialize(position, new VoidCallback() {
             public void operationComplete() {
                 log.debug("[{}] Opened new cursor: {}", name, cursor);
-                cursors.add(cursor);
+                synchronized (ManagedLedgerImpl.this) {
+                    cursors.add(cursor);
+                }
                 callback.openCursorComplete(cursor, ctx);
             }
 
