@@ -22,6 +22,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -718,8 +720,8 @@ class ManagedCursorImpl implements ManagedCursor {
     void persistPosition(final LedgerHandle lh, final PositionImpl position, final VoidCallback callback) {
         PositionInfo pi = position.getPositionInfo();
         log.debug("[{}] Cursor {} Appending to ledger={} position={}", ledger.getName(), name, lh.getId(), position);
-        lh.asyncAddEntry(pi.toByteArray(), new AddCallback() {
-            public void addComplete(int rc, LedgerHandle lh, long entryId, Object ctx) {
+        lh.asyncAddEntry(pi.toByteArray(), new TimedAddCallback() {
+            public void timedAddComplete(int rc, LedgerHandle lh, long entryId, Object ctx) {
                 if (rc == BKException.Code.OK) {
                     log.debug("[{}] Updated cursor {} position {} in meta-ledger {}", ledger.getName(), name, position,
                             lh.getId());
@@ -825,6 +827,40 @@ class ManagedCursorImpl implements ManagedCursor {
                 }
             }
         }, null);
+    }
+
+    private abstract class TimedAddCallback implements AddCallback, Runnable {
+        private final ScheduledFuture<?> timerFuture;
+        private final AtomicBoolean triggered;
+
+        public TimedAddCallback() {
+            timerFuture = ledger.getExecutor().schedule(this, 3, TimeUnit.SECONDS);
+            triggered = new AtomicBoolean(false);
+        }
+
+        /**
+         * Called when the timer expires
+         */
+        @Override
+        public final void run() {
+            if (triggered.compareAndSet(false, true)) {
+                log.warn("[{}] [{}] Timeout on add operation", ledger.getName(), getName());
+                timedAddComplete(BKException.Code.WriteException, null, -1, null);
+            }
+        }
+
+        @Override
+        public final void addComplete(int rc, LedgerHandle lh, long entryId, Object ctx) {
+            if (triggered.compareAndSet(false, true)) {
+                timerFuture.cancel(false);
+                timedAddComplete(rc, lh, entryId, ctx);
+            } else {
+                log.warn("[{}] [{}] Completed an already timed-out operation on ledger: {}@{} rc={}", ledger.getName(),
+                        getName(), lh.getId(), entryId);
+            }
+        }
+
+        abstract void timedAddComplete(int rc, LedgerHandle lh, long entryId, Object ctx);
     }
 
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorImpl.class);

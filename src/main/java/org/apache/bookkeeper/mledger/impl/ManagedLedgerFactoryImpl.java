@@ -50,7 +50,7 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
     private final ZooKeeper zookeeper;
     protected final ScheduledExecutorService executor = Executors.newScheduledThreadPool(5, new ThreadFactoryBuilder()
             .setNameFormat("bookkeeper-ml-%s").build());
-    private final OrderedSafeExecutor orderedExecutor = new OrderedSafeExecutor(5);
+    private final OrderedSafeExecutor orderedExecutor = new OrderedSafeExecutor(5, "bookkeper-ml-workers");
 
     protected final ConcurrentMap<String, ManagedLedgerImpl> ledgers = Maps.newConcurrentMap();
 
