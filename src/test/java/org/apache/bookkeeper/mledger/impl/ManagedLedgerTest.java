@@ -292,22 +292,22 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
             ledger.addEntry(("dummy-entry-" + i).getBytes(Encoding));
 
         List<Entry> entries = cursor.readEntries(100);
-        assertEquals(entries.size(), 10);
-        assertEquals(cursor.hasMoreEntries(), true);
-
-        PositionImpl first = (PositionImpl) entries.get(0).getPosition();
-
-        // Read again, from next ledger id
-        entries = cursor.readEntries(100);
-        assertEquals(entries.size(), 1);
+        assertEquals(entries.size(), 11);
         assertEquals(cursor.hasMoreEntries(), false);
 
-        PositionImpl last = (PositionImpl) entries.get(0).getPosition();
+        PositionImpl first = (PositionImpl) entries.get(0).getPosition();
+        PositionImpl last = (PositionImpl) entries.get(entries.size() - 1).getPosition();
 
         log.info("First={} Last={}", first, last);
         assertTrue(first.getLedgerId() < last.getLedgerId());
         assertEquals(first.getEntryId(), 0);
         assertEquals(last.getEntryId(), 0);
+
+        // Read again, from next ledger id
+        entries = cursor.readEntries(100);
+        assertEquals(entries.size(), 0);
+        assertEquals(cursor.hasMoreEntries(), false);
+
         ledger.close();
     }
 
@@ -332,17 +332,16 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
             ledger.addEntry(content);
 
         List<Entry> entries = cursor.readEntries(100);
-        assertEquals(entries.size(), 2);
-        assertEquals(cursor.hasMoreEntries(), true);
+        assertEquals(entries.size(), 3);
+        assertEquals(cursor.hasMoreEntries(), false);
 
         PositionImpl first = (PositionImpl) entries.get(0).getPosition();
+        PositionImpl last = (PositionImpl) entries.get(entries.size() - 1).getPosition();
 
         // Read again, from next ledger id
         entries = cursor.readEntries(100);
-        assertEquals(entries.size(), 1);
+        assertEquals(entries.size(), 0);
         assertEquals(cursor.hasMoreEntries(), false);
-
-        PositionImpl last = (PositionImpl) entries.get(0).getPosition();
 
         log.info("First={} Last={}", first, last);
         assertTrue(first.getLedgerId() < last.getLedgerId());
@@ -797,13 +796,10 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         assertEquals(cursor.getNumberOfEntries(), 2);
 
         entries = cursor.readEntries(2);
+        assertEquals(entries.size(), 2);
+
+        entries = cursor.readEntries(2);
         assertEquals(entries.size(), 0);
-
-        entries = cursor.readEntries(2);
-        assertEquals(entries.size(), 1);
-
-        entries = cursor.readEntries(2);
-        assertEquals(entries.size(), 1);
 
         entries = cursor.readEntries(2);
         assertEquals(entries.size(), 0);

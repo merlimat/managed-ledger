@@ -78,12 +78,10 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         ledger.addEntry("entry-1".getBytes(Encoding));
         ledger.addEntry("entry-2".getBytes(Encoding));
 
-        assertEquals(c1.readEntries(2).size(), 1);
-        assertEquals(c1.readEntries(2).size(), 1);
+        assertEquals(c1.readEntries(2).size(), 2);
         assertEquals(c1.readEntries(2).size(), 0);
 
-        assertEquals(c2.readEntries(2).size(), 1);
-        assertEquals(c2.readEntries(2).size(), 1);
+        assertEquals(c2.readEntries(2).size(), 2);
         assertEquals(c2.readEntries(2).size(), 0);
     }
 
@@ -416,14 +414,14 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         assertEquals(c1.getNumberOfEntries(), 4);
         c1.markDelete(p1);
         assertEquals(c1.getNumberOfEntries(), 3);
-        assertEquals(c1.readEntries(10).size(), 1);
-        assertEquals(c1.getNumberOfEntries(), 2);
+        assertEquals(c1.readEntries(10).size(), 3);
+        assertEquals(c1.getNumberOfEntries(), 0);
         c1.rewind();
         assertEquals(c1.getNumberOfEntries(), 3);
         c1.markDelete(p2);
         assertEquals(c1.getNumberOfEntries(), 2);
-        assertEquals(c1.readEntries(10).size(), 0);
         assertEquals(c1.readEntries(10).size(), 2);
+        assertEquals(c1.readEntries(10).size(), 0);
         assertEquals(c1.getNumberOfEntries(), 0);
         c1.rewind();
         assertEquals(c1.getNumberOfEntries(), 2);
