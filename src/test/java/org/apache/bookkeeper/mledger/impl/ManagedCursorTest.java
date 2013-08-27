@@ -213,15 +213,35 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
 
     @Test(timeOut = 20000)
     void asyncReadWithErrors() throws Exception {
-        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
-        ManagedLedger ledger = factory.open("my_test_ledger");
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open("my_test_ledger");
         ManagedCursor cursor = ledger.openCursor("c1");
 
         ledger.addEntry("dummy-entry-1".getBytes(Encoding));
-
+        
         final CountDownLatch counter = new CountDownLatch(1);
 
         stopBookKeeper();
+
+        cursor.asyncReadEntries(100, new ReadEntriesCallback() {
+            public void readEntriesComplete(List<Entry> entries, Object ctx) {
+                counter.countDown();
+            }
+
+            public void readEntriesFailed(ManagedLedgerException exception, Object ctx) {
+                fail("async-call should not have failed");
+            }
+
+        }, null);
+
+        counter.await();
+        
+        cursor.rewind();
+        
+        // Clear the cache to force reading from BK
+        ledger.entryCache.clear();
+
+        final CountDownLatch counter2 = new CountDownLatch(1);
 
         cursor.asyncReadEntries(100, new ReadEntriesCallback() {
             public void readEntriesComplete(List<Entry> entries, Object ctx) {
@@ -229,12 +249,12 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
             }
 
             public void readEntriesFailed(ManagedLedgerException exception, Object ctx) {
-                counter.countDown();
+                counter2.countDown();
             }
 
         }, null);
 
-        counter.await();
+        counter2.await();
     }
 
     @Test(timeOut = 20000, expectedExceptions = IllegalArgumentException.class)

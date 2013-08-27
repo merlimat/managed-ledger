@@ -79,6 +79,7 @@ class OpAddEntry implements AddCallback, CloseCallback {
         if (rc == BKException.Code.OK) {
             ml.numberOfEntries.incrementAndGet();
             ml.totalSize.addAndGet(data.length);
+            ml.entryCache.insert(new EntryImpl(lh.getId(), entryId, data));
 
             if (closeWhenDone) {
                 log.info("[{}] Closing ledger {} for being full", ml.getName(), lh.getId());
@@ -109,7 +110,7 @@ class OpAddEntry implements AddCallback, CloseCallback {
         updateLatency();
         callback.addComplete(new PositionImpl(lh.getId(), entryId), ctx);
     }
-    
+
     private void updateLatency() {
         double latencyMs = (System.nanoTime() - startTime) / 1e6;
         ml.mbean.addAddEntryLatencySample(latencyMs);

@@ -30,6 +30,7 @@ import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
+import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl.ManagedLedgerInitializeLedgerCallback;
 import org.apache.bookkeeper.mledger.impl.MetaStore.OpenMode;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
@@ -53,8 +54,14 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
     private final OrderedSafeExecutor orderedExecutor = new OrderedSafeExecutor(5, "bookkeper-ml-workers");
 
     protected final ConcurrentMap<String, ManagedLedgerImpl> ledgers = Maps.newConcurrentMap();
+    protected final EntryCacheManager entryCacheManager;
 
     public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration) throws Exception {
+        this(bkClientConfiguration, new ManagedLedgerFactoryConfig());
+    }
+
+    public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration, ManagedLedgerFactoryConfig config)
+            throws Exception {
         final CountDownLatch counter = new CountDownLatch(1);
         final String zookeeperQuorum = checkNotNull(bkClientConfiguration.getZkServers());
 
@@ -79,13 +86,19 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
         this.isBookkeeperManaged = true;
 
         this.store = new MetaStoreImplZookeeper(zookeeper);
+        this.entryCacheManager = new EntryCacheManager(config);
     }
 
     public ManagedLedgerFactoryImpl(BookKeeper bookKeeper, ZooKeeper zooKeeper) throws Exception {
+        this(bookKeeper, zooKeeper, new ManagedLedgerFactoryConfig());
+    }
+    
+    public ManagedLedgerFactoryImpl(BookKeeper bookKeeper, ZooKeeper zooKeeper, ManagedLedgerFactoryConfig config) throws Exception {
         this.bookKeeper = bookKeeper;
         this.isBookkeeperManaged = false;
         this.zookeeper = null;
         this.store = new MetaStoreImplZookeeper(zooKeeper);
+        this.entryCacheManager = new EntryCacheManager(config);
     }
 
     @Override

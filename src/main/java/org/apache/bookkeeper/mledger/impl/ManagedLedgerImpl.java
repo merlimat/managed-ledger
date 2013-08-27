@@ -96,6 +96,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
     // Map with reference count of read operations on each ledger
     private final Map<Long, Long> pendingReadOperations = Maps.newTreeMap();
 
+    final EntryCache entryCache;
+
     /**
      * This lock is held while the ledgers list is updated asynchronously on the metadata store. Since we use the store
      * version, we cannot have multiple concurrent updates.
@@ -165,6 +167,8 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
         };
         this.ledgerCache = CacheBuilder.newBuilder().expireAfterAccess(60, TimeUnit.SECONDS)
                 .removalListener(removalListener).build();
+
+        this.entryCache = factory.entryCacheManager.getEntryCache(name);
     }
 
     private void registerMBean(final OpenMode openMode, ManagedLedgerInitializeLedgerCallback callback) {
@@ -775,7 +779,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
 
     synchronized void asyncReadEntries(OpReadEntry opReadEntry) {
         if (state == State.Fenced || state == State.Closed) {
-            opReadEntry.failed(new ManagedLedgerFencedException());
+            opReadEntry.readEntriesFailed(new ManagedLedgerFencedException(), null);
             return;
         }
 
@@ -823,7 +827,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
         long lastEntry = min(firstEntry + opReadEntry.count - 1, ledger.getLastAddConfirmed());
 
         log.debug("[{}] Reading entries from ledger {} - first={} last={}", name, ledger.getId(), firstEntry, lastEntry);
-        ledger.asyncReadEntries(firstEntry, lastEntry, opReadEntry, null);
+        entryCache.asyncReadEntry(ledger, firstEntry, lastEntry, opReadEntry);
     }
 
     @Override
@@ -833,7 +837,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
         if (rc != BKException.Code.OK) {
             log.error("[{}] Error opening ledger for reading at position {} - {}", name, opReadEntry.readPosition,
                     BKException.getMessage(rc));
-            opReadEntry.failed(new ManagedLedgerException(BKException.create(rc)));
+            opReadEntry.readEntriesFailed(new ManagedLedgerException(BKException.create(rc)), null);
             return;
         }
 
