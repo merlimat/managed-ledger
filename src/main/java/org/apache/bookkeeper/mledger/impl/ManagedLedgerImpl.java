@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.management.JMException;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
@@ -79,6 +78,8 @@ import com.google.common.collect.Range;
 
 class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, ReadCallback {
     private final static long MegaByte = 1024 * 1024;
+
+    protected final static int AsyncOperationTimeoutSeconds = 30;
 
     private final BookKeeper bookKeeper;
     private final String name;
@@ -190,7 +191,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
         try {
             mBeanServer.registerMBean(mbean, mbeanObjectName);
             callback.initializeComplete();
-        } catch (JMException e) {
+        } catch (Exception e) {
             log.error("Failed to register ManagedLedger MBean", e);
             callback.initializeFailed(new ManagedLedgerException(e));
         }
@@ -400,7 +401,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
             }
         }, null);
 
-        counter.await();
+        if (!counter.await(AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during add-entry operation");
+        }
+
         if (result.status != null) {
             log.error("Error adding entry", result.status);
             throw result.status;
@@ -476,7 +480,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
         }, null);
 
-        counter.await();
+        if (!counter.await(AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during open-curosr operation");
+        }
+
         if (result.exception != null) {
             log.error("Error adding entry", result.exception);
             throw result.exception;
@@ -578,7 +585,10 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback, 
 
         }, null);
 
-        counter.await();
+        if (!counter.await(AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during delete-cursors operation");
+        }
+
         if (result.exception != null) {
             log.error("Error adding entry", result.exception);
             throw result.exception;

@@ -87,11 +87,6 @@ class OpAddEntry implements AddCallback, CloseCallback {
                 updateLatency();
                 callback.addComplete(new PositionImpl(lh.getId(), entryId), ctx);
             }
-        } else if (rc == BKException.Code.LedgerFencedException) {
-            ManagedLedgerException status = new ManagedLedgerFencedException(BKException.create(rc));
-            ml.setFenced();
-            ml.mbean.recordAddEntryError();
-            callback.addFailed(status, ctx);
         } else {
             ManagedLedgerException status = new ManagedLedgerException(BKException.create(rc));
             ml.mbean.recordAddEntryError();

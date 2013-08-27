@@ -225,7 +225,9 @@ class ManagedCursorImpl implements ManagedCursor {
 
         }, null);
 
-        counter.await();
+        if (!counter.await(ManagedLedgerImpl.AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during read-entries operation");
+        }
 
         if (result.exception != null)
             throw result.exception;
@@ -308,7 +310,10 @@ class ManagedCursorImpl implements ManagedCursor {
             }
         }, null);
 
-        counter.await();
+        if (!counter.await(ManagedLedgerImpl.AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during mark-delete operation");
+        }
+
         if (result.exception != null) {
             throw result.exception;
         }
@@ -334,7 +339,10 @@ class ManagedCursorImpl implements ManagedCursor {
             }
         }, null);
 
-        counter.await();
+        if (!counter.await(ManagedLedgerImpl.AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during clear backlog operation");
+        }
+
         if (result.exception != null) {
             throw result.exception;
         }
@@ -403,7 +411,7 @@ class ManagedCursorImpl implements ManagedCursor {
 
         // Do the asyncMarkDelete in a background thread to avoid holding the current thread when ledgerMutex.lockRead()
         // becomes blocking.
-        ledger.getOrderedExecutor().submitOrdered(ledger.getName(), new SafeRunnable() {
+        SafeRunnable markDeleteTask = new SafeRunnable() {
             public void safeRun() {
                 ledgerMutex.lockRead();
 
@@ -447,11 +455,18 @@ class ManagedCursorImpl implements ManagedCursor {
                     }
                 });
             }
-        });
+        };
+
+        try {
+            ledger.getOrderedExecutor().submitOrdered(ledger.getName(), markDeleteTask);
+        } catch (Exception e) {
+            log.error("[{}] [{}] Failed to submit mark-delete task to executor", ledger.getName(), name, e);
+            callback.markDeleteFailed(new ManagedLedgerException(e), ctx);
+        }
     }
 
     @Override
-    public void delete(Position position) throws InterruptedException, ManagedLedgerException {
+    public void delete(final Position position) throws InterruptedException, ManagedLedgerException {
         checkNotNull(position);
         checkArgument(position instanceof PositionImpl);
 
@@ -461,19 +476,37 @@ class ManagedCursorImpl implements ManagedCursor {
 
         final Result result = new Result();
         final CountDownLatch counter = new CountDownLatch(1);
+        final AtomicBoolean timeout = new AtomicBoolean(false);
 
         asyncDelete(position, new AsyncCallbacks.DeleteCallback() {
             public void deleteComplete(Object ctx) {
+                if (timeout.get()) {
+                    log.warn("[{}] [{}] Delete operation timeout. Callback deleteComplete at position {}",
+                            ledger.getName(), name, position);
+                }
+
                 counter.countDown();
             }
 
             public void deleteFailed(ManagedLedgerException exception, Object ctx) {
                 result.exception = exception;
+
+                if (timeout.get()) {
+                    log.warn("[{}] [{}] Delete operation timeout. Callback deleteFailed at position {}",
+                            ledger.getName(), name, position);
+                }
+
                 counter.countDown();
             }
         }, null);
 
-        counter.await();
+        if (!counter.await(ManagedLedgerImpl.AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            timeout.set(true);
+            log.warn("[{}] [{}] Delete operation timeout. No callback was triggered at position {}", ledger.getName(),
+                    name, position);
+            throw new ManagedLedgerException("Timeout during delete operation");
+        }
+
         if (result.exception != null) {
             throw result.exception;
         }
@@ -498,6 +531,7 @@ class ManagedCursorImpl implements ManagedCursor {
             if (individualDeletedMessages.contains(position)) {
                 callback.deleteFailed(new ManagedLedgerException(new IllegalArgumentException(
                         "Position had already been deleted")), ctx);
+                return;
             }
 
             PositionImpl previousPosition = ledger.getPreviousPosition(position);
@@ -515,12 +549,13 @@ class ManagedCursorImpl implements ManagedCursor {
             if (range.lowerEndpoint().compareTo(acknowledgedPosition.get()) <= 0) {
                 log.debug("[{}] Found a position range to mark delete for cursor {}: {} ", ledger.getName(), name,
                         range);
-                asyncMarkDelete(range.upperEndpoint(), new MarkDeleteCallback() {
-                    public void markDeleteComplete(Object ctx) {
+                Position markDeletePosition = range.upperEndpoint();
+                asyncMarkDelete(markDeletePosition, new TimedMarkDeleteCallback(markDeletePosition) {
+                    public void timedMarkDeleteComplete(Object ctx) {
                         callback.deleteComplete(ctx);
                     }
 
-                    public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
+                    public void timedMarkDeleteFailed(ManagedLedgerException exception, Object ctx) {
                         callback.deleteFailed(exception, ctx);
                     }
 
@@ -530,6 +565,9 @@ class ManagedCursorImpl implements ManagedCursor {
                 // messages are not needed anymore
                 callback.deleteComplete(ctx);
             }
+        } catch (Exception e) {
+            log.error("[{}] [{}] Error doing asyncDelete", ledger.getName(), name, e);
+            callback.deleteFailed(new ManagedLedgerException(e), ctx);
         } finally {
             deletedMessagesMutex.writeLock().unlock();
         }
@@ -834,7 +872,8 @@ class ManagedCursorImpl implements ManagedCursor {
         private final AtomicBoolean triggered;
 
         public TimedAddCallback() {
-            timerFuture = ledger.getExecutor().schedule(this, 3, TimeUnit.SECONDS);
+            timerFuture = ledger.getExecutor().schedule(this, ManagedLedgerImpl.AsyncOperationTimeoutSeconds / 2,
+                    TimeUnit.SECONDS);
             triggered = new AtomicBoolean(false);
         }
 
@@ -861,6 +900,54 @@ class ManagedCursorImpl implements ManagedCursor {
         }
 
         abstract void timedAddComplete(int rc, LedgerHandle lh, long entryId, Object ctx);
+    }
+
+    private abstract class TimedMarkDeleteCallback implements MarkDeleteCallback, Runnable {
+        private final ScheduledFuture<?> timerFuture;
+        private final AtomicBoolean triggered;
+        private final Position position;
+
+        public TimedMarkDeleteCallback(Position position) {
+            timerFuture = ledger.getExecutor().schedule(this, ManagedLedgerImpl.AsyncOperationTimeoutSeconds / 2,
+                    TimeUnit.SECONDS);
+            triggered = new AtomicBoolean(false);
+            this.position = position;
+        }
+
+        /**
+         * Called when the timer expires
+         */
+        @Override
+        public final void run() {
+            if (triggered.compareAndSet(false, true)) {
+                log.warn("[{}] [{}] Timeout on mark-delete operation", ledger.getName(), getName());
+                timedMarkDeleteFailed(new ManagedLedgerException("Timeout on mark-delete operation"), null);
+            }
+        }
+
+        public void markDeleteComplete(Object ctx) {
+            if (triggered.compareAndSet(false, true)) {
+                timerFuture.cancel(false);
+                timedMarkDeleteComplete(ctx);
+            } else {
+                log.warn("[{}] [{}] Completed an already timed-out mark-delete operation at {}", ledger.getName(),
+                        getName(), position);
+            }
+        }
+
+        public void markDeleteFailed(ManagedLedgerException exception, Object ctx) {
+            if (triggered.compareAndSet(false, true)) {
+                timerFuture.cancel(false);
+                timedMarkDeleteFailed(exception, ctx);
+            } else {
+                log.warn("[{}] [{}] Completed an already timed-out mark-delete operation at {}. Error: {}",
+                        ledger.getName(), getName(), position, exception);
+            }
+        }
+
+        abstract void timedMarkDeleteComplete(Object ctx);
+
+        abstract void timedMarkDeleteFailed(ManagedLedgerException exception, Object ctx);
     }
 
     private static final Logger log = LoggerFactory.getLogger(ManagedCursorImpl.class);

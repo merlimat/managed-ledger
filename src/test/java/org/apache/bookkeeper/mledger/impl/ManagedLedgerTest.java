@@ -854,7 +854,7 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         ledger.close();
     }
 
-    @Test
+    @Test(enabled=false)
     public void fenceManagedLedger() throws Exception {
         ManagedLedgerFactory factory1 = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
         ManagedLedger ledger1 = factory1.open("my_test_ledger");

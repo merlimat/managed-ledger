@@ -113,7 +113,10 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
                 latch.countDown();
             }
         }, null);
-        latch.await();
+
+        if (!latch.await(ManagedLedgerImpl.AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during ledger open operation");
+        }
 
         if (r.e != null) {
             throw r.e;
@@ -186,7 +189,10 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
                 latch.countDown();
             }
         }, null);
-        latch.await();
+
+        if (!latch.await(ManagedLedgerImpl.AsyncOperationTimeoutSeconds, TimeUnit.SECONDS)) {
+            throw new ManagedLedgerException("Timeout during open-read-only operation");
+        }
 
         if (r.e != null) {
             throw r.e;
