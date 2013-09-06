@@ -23,6 +23,7 @@ import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 class EntryCacheManager {
@@ -31,6 +32,7 @@ class EntryCacheManager {
     private final double cacheEvictionWatermak;
     private final AtomicLong currentSize = new AtomicLong(0);
     private final ConcurrentMap<String, EntryCache> caches = Maps.newConcurrentMap();
+    private final EntryCacheEvictionPolicy evictionPolicy;
 
     private final AtomicBoolean evictionInProgress = new AtomicBoolean(false);
 
@@ -42,6 +44,7 @@ class EntryCacheManager {
     public EntryCacheManager(ManagedLedgerFactoryConfig config) {
         this.maxSize = config.getMaxCacheSize();
         this.cacheEvictionWatermak = config.getCacheEvictionWatermark();
+        this.evictionPolicy = new EntryCacheDefaultEvictionPolicy();
 
         log.info("Initialized managed-ledger entry cache of {} Mb", maxSize / MB);
     }
@@ -74,6 +77,7 @@ class EntryCacheManager {
             long sizeToEvict = totalSize - (long) (maxSize * cacheEvictionWatermak);
             log.info("Triggering cache eviction. total size: {} Mb -- Need to discard: {} Mb", totalSize / MB,
                     sizeToEvict / MB);
+            evictionPolicy.doEviction(Lists.newArrayList(caches.values()), sizeToEvict);
         }
     }
 

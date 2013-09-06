@@ -135,22 +135,25 @@ public class RangeLruCache<Key extends Comparable<Key>, Value> {
      * @param first
      * @param last
      * @param lastInclusive
-     * @return the number of removed entries
+     * @return an pair of ints, containing the number of removed entries and the total size
      */
-    public synchronized int removeRange(Key first, Key last, boolean lastInclusive) {
+    public synchronized Pair<Integer, Long> removeRange(Key first, Key last, boolean lastInclusive) {
         Map<Key, Node<Key, Value>> subMap = entries.subMap(first, true, last, lastInclusive);
 
         int removedEntries = 0;
+        long removedSize = 0;
 
         for (Key key : subMap.keySet()) {
             Node<Key, Value> node = entries.remove(key);
             removeFromList(node);
 
-            size.addAndGet(-weighter.getSize(node.value));
+            removedSize += weighter.getSize(node.value);
             ++removedEntries;
         }
 
-        return removedEntries;
+        size.addAndGet(-removedSize);
+
+        return Pair.create(removedEntries, removedSize);
     }
 
     /**
@@ -187,11 +190,13 @@ public class RangeLruCache<Key extends Comparable<Key>, Value> {
 
     /**
      * Remove all the entries from the cache
+     * 
+     * @return the old size
      */
-    public synchronized void clear() {
+    public synchronized long clear() {
         entries.clear();
         head = tail = null;
-        size.set(0);
+        return size.getAndSet(0);
     }
 
     /**

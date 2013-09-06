@@ -21,7 +21,6 @@ import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.AddEntryCallback;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
-import org.apache.bookkeeper.mledger.ManagedLedgerException.ManagedLedgerFencedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +78,10 @@ class OpAddEntry implements AddCallback, CloseCallback {
         if (rc == BKException.Code.OK) {
             ml.numberOfEntries.incrementAndGet();
             ml.totalSize.addAndGet(data.length);
-            ml.entryCache.insert(new EntryImpl(lh.getId(), entryId, data));
+            if (ml.hasCursors()) {
+                // Avoid caching entries if no cursor has been created
+                ml.entryCache.insert(new EntryImpl(lh.getId(), entryId, data));
+            }
 
             if (closeWhenDone) {
                 log.info("[{}] Closing ledger {} for being full", ml.getName(), lh.getId());

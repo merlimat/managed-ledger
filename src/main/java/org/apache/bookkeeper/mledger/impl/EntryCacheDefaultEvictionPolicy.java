@@ -40,6 +40,7 @@ public class EntryCacheDefaultEvictionPolicy implements EntryCacheEvictionPolicy
         checkArgument(!caches.isEmpty());
 
         Collections.sort(caches);
+        Collections.reverse(caches);
 
         long totalSize = 0;
         for (EntryCache cache : caches) {
@@ -50,8 +51,11 @@ public class EntryCacheDefaultEvictionPolicy implements EntryCacheEvictionPolicy
         // PercentOfSizeToConsiderForEviction
         List<EntryCache> cachesToEvict = Lists.newArrayList();
         long cachesToEvictTotalSize = 0;
+        long sizeToConsiderForEviction = (long) (totalSize * PercentOfSizeToConsiderForEviction);
+        log.debug("Need to gather at least {} from caches", sizeToConsiderForEviction);
+
         int cacheIdx = 0;
-        while (cachesToEvictTotalSize < (long) (totalSize * PercentOfSizeToConsiderForEviction)) {
+        while (cachesToEvictTotalSize < sizeToConsiderForEviction) {
             // This condition should always be true, considering that we cannot free more size that what we have in
             // cache
             checkArgument(cacheIdx < caches.size());
@@ -59,6 +63,8 @@ public class EntryCacheDefaultEvictionPolicy implements EntryCacheEvictionPolicy
             EntryCache entryCache = caches.get(cacheIdx++);
             cachesToEvictTotalSize += entryCache.getSize();
             cachesToEvict.add(entryCache);
+
+            log.debug("Added cache {} with size {}", entryCache.getName(), entryCache.getSize());
         }
 
         int removedEntries = 0;

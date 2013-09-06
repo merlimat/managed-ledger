@@ -26,6 +26,7 @@ import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
+import org.apache.bookkeeper.mledger.util.Pair;
 import org.apache.bookkeeper.mledger.util.RangeLruCache;
 import org.apache.bookkeeper.mledger.util.RangeLruCache.Weighter;
 import org.slf4j.Logger;
@@ -60,7 +61,12 @@ public class EntryCacheImpl implements EntryCache {
         this.name = name;
         this.entries = new RangeLruCache<PositionImpl, EntryImpl>(entryWeighter);
 
-        log.info("Initialized managed-ledger entry cache for {}", this.name);
+        log.info("[{}] Initialized managed-ledger entry cache", this.name);
+    }
+
+    @Override
+    public String getName() {
+        return name;
     }
 
     @Override
@@ -71,12 +77,15 @@ public class EntryCacheImpl implements EntryCache {
     }
 
     @Override
-    public void invalidateEntries(long ledgerId, long lastEntry) {
-        final PositionImpl firstPosition = new PositionImpl(ledgerId, 0);
-        final PositionImpl lastPosition = new PositionImpl(ledgerId, lastEntry);
+    public void invalidateEntries(final PositionImpl lastPosition) {
+        final PositionImpl firstPosition = new PositionImpl(-1, 0);
 
-        long entriesRemoved = entries.removeRange(firstPosition, lastPosition, true);
-        log.debug("Invalidated entries up to {}@{} - Entries removed: {}", ledgerId, lastEntry, entriesRemoved);
+        Pair<Integer, Long> removed = entries.removeRange(firstPosition, lastPosition, true);
+        int entriesRemoved = removed.first;
+        long sizeRemoved = removed.second;
+        log.debug("[{}] Invalidated entries up to {} - Entries removed: {} - Size removed: {}", name, lastPosition,
+                entriesRemoved, sizeRemoved);
+        manager.entriesRemoved(sizeRemoved);
     }
 
     @Override
@@ -84,8 +93,12 @@ public class EntryCacheImpl implements EntryCache {
         final PositionImpl firstPosition = new PositionImpl(ledgerId, 0);
         final PositionImpl lastPosition = new PositionImpl(ledgerId + 1, 0);
 
-        long entriesRemoved = entries.removeRange(firstPosition, lastPosition, false);
-        log.debug("Invalidated all entries on ledger {} - Entries removed: {}", ledgerId, entriesRemoved);
+        Pair<Integer, Long> removed = entries.removeRange(firstPosition, lastPosition, false);
+        int entriesRemoved = removed.first;
+        long sizeRemoved = removed.second;
+        log.debug("[{}] Invalidated all entries on ledger {} - Entries removed: {} - Size removed: {}", name, ledgerId,
+                entriesRemoved, sizeRemoved);
+        manager.entriesRemoved(sizeRemoved);
     }
 
     @Override
@@ -97,7 +110,7 @@ public class EntryCacheImpl implements EntryCache {
         final PositionImpl lastPosition = new PositionImpl(lh.getId(), lastEntry);
         final Range<Long> completeRange = Range.closed(firstEntry, lastEntry);
 
-        log.debug("Reading entries range ledger {}: {} to {}", ledgerId, firstEntry, lastEntry);
+        log.debug("[{}] Reading entries range ledger {}: {} to {}", name, ledgerId, firstEntry, lastEntry);
 
         RangeSet<Long> availablePositions = TreeRangeSet.create();
         for (EntryImpl entry : entries.getRange(firstPosition, lastPosition)) {
@@ -107,11 +120,11 @@ public class EntryCacheImpl implements EntryCache {
             availablePositions.add(Range.closedOpen(entryId, entryId + 1));
         }
 
-        log.debug("Ledger {} -- entries: {}-{} -- found in cache: {}", ledgerId, firstEntry, lastEntry,
+        log.debug("[{}] Ledger {} -- entries: {}-{} -- found in cache: {}", name, ledgerId, firstEntry, lastEntry,
                 availablePositions);
 
         RangeSet<Long> missingEntries = availablePositions.complement().subRangeSet(completeRange);
-        log.debug("Missing entries: {}", missingEntries);
+        log.debug("[{}] Missing entries: {}", name, missingEntries);
         if (missingEntries.isEmpty()) {
             // All entries found in cache
             callback.readEntriesComplete((List) entriesToReturn, null);
@@ -156,15 +169,17 @@ public class EntryCacheImpl implements EntryCache {
                 long last = range.upperBoundType() == BoundType.CLOSED ? range.upperEndpoint()
                         : range.upperEndpoint() - 1;
 
-                log.debug("Reading from bookkeeper on ledger {} - first: {} - last: {}", ledgerId, first, last);
+                log.debug("[{}] Reading from bookkeeper on ledger {} - first: {} - last: {}", name, ledgerId, first,
+                        last);
                 lh.asyncReadEntries(first, last, readCallback, null);
             }
         }
     }
-    
+
     @Override
     public void clear() {
-        entries.clear();
+        long removedSize = entries.clear();
+        manager.entriesRemoved(removedSize);
     }
 
     @Override

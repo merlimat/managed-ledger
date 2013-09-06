@@ -23,6 +23,11 @@ import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 public interface EntryCache extends Comparable<EntryCache> {
 
     /**
+     * @return the name of the cache
+     */
+    String getName();
+
+    /**
      * Insert an entry in the cache.
      * <p>
      * If the overall limit have been reached, this will triggered the eviction of other entries, possibly from other
@@ -34,14 +39,12 @@ public interface EntryCache extends Comparable<EntryCache> {
     void insert(EntryImpl entry);
 
     /**
-     * Remove from cache all the entries related to a ledger up to lastEntry included.
+     * Remove from cache all the entries related to a ledger up to lastPosition included.
      * 
-     * @param ledgerId
-     *            the ledger id
-     * @param lastEntry
-     *            the id of the last entry to be invalidated (inclusive)
+     * @param lastPosition
+     *            the position of the last entry to be invalidated (inclusive)
      */
-    void invalidateEntries(long ledgerId, long lastEntry);
+    void invalidateEntries(PositionImpl lastPosition);
 
     /**
      * Remove from the cache all the entries belonging to a specific ledger

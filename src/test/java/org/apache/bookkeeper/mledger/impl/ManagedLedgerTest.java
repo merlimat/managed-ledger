@@ -850,7 +850,7 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         ledger.close();
     }
 
-    @Test(enabled=false)
+    @Test(enabled = false)
     public void fenceManagedLedger() throws Exception {
         ManagedLedgerFactory factory1 = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
         ManagedLedger ledger1 = factory1.open("my_test_ledger");
@@ -1336,4 +1336,44 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         counter.await();
     }
 
+    @Test
+    public void invalidateConsumedEntriesFromCache() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open("my_test_ledger");
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCache entryCache = ledger.entryCache;
+
+        ManagedCursor c1 = ledger.openCursor("c1");
+        ManagedCursor c2 = ledger.openCursor("c2");
+
+        Position p1 = ledger.addEntry("entry-1".getBytes());
+        Position p2 = ledger.addEntry("entry-2".getBytes());
+        Position p3 = ledger.addEntry("entry-3".getBytes());
+        ledger.addEntry("entry-4".getBytes());
+
+        assertEquals(entryCache.getSize(), 7 * 4);
+        assertEquals(cacheManager.getSize(), entryCache.getSize());
+
+        c2.markDelete(p3);
+
+        assertEquals(entryCache.getSize(), 7 * 4);
+        assertEquals(cacheManager.getSize(), entryCache.getSize());
+
+        c1.delete(p1);
+        assertEquals(entryCache.getSize(), 7 * 3);
+        assertEquals(cacheManager.getSize(), entryCache.getSize());
+
+        c1.delete(p2);
+        assertEquals(entryCache.getSize(), 7 * 2);
+        assertEquals(cacheManager.getSize(), entryCache.getSize());
+
+        ledger.deleteCursor("c1");
+        assertEquals(entryCache.getSize(), 7);
+        assertEquals(cacheManager.getSize(), entryCache.getSize());
+
+        ledger.deleteCursor("c2");
+        assertEquals(entryCache.getSize(), 0);
+        assertEquals(cacheManager.getSize(), entryCache.getSize());
+    }
 }

@@ -547,6 +547,14 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
                     public void operationComplete() {
                         synchronized (ManagedLedgerImpl.this) {
                             cursors.removeCursor(consumerName);
+
+                            // Redo invalidation of entries in cache
+                            PositionImpl slowestConsumerPosition = cursors.getSlowestReaderPosition();
+                            if (slowestConsumerPosition != null) {
+                                entryCache.invalidateEntries(slowestConsumerPosition);
+                            } else {
+                                entryCache.clear();
+                            }
                         }
 
                         trimConsumedLedgersInBackground();
@@ -599,6 +607,15 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
     @Override
     public synchronized Iterable<ManagedCursor> getCursors() {
         return cursors.toList();
+    }
+
+    /**
+     * Tells whether the managed ledger has any cursor registered.
+     * 
+     * @return true if at least a cursor exists
+     */
+    public synchronized boolean hasCursors() {
+        return !cursors.isEmpty();
     }
 
     @Override
@@ -879,11 +896,13 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
     }
 
     synchronized void updateCursor(ManagedCursorImpl cursor, PositionImpl oldPosition, PositionImpl newPosition) {
-        // checkFenced();
         cursors.cursorUpdated(cursor);
 
+        // Drop from cache all the entries consumed by all the cursors
+        entryCache.invalidateEntries(cursors.getSlowestReaderPosition());
+
+        // Only trigger a trimming when switching to the next ledger
         if (oldPosition.getLedgerId() != newPosition.getLedgerId()) {
-            // Only trigger a trimming when switching to the next ledger
             trimConsumedLedgersInBackground();
         }
     }
@@ -987,6 +1006,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
             try {
                 ++removedCount;
                 removedSize += ls.getSize();
+                entryCache.invalidateAllEntries(ls.getLedgerId());
                 bookKeeper.deleteLedger(ls.getLedgerId());
             } catch (BKNoSuchLedgerExistsException e) {
                 log.warn("[{}] Ledger was already deleted {}", name, ls.getLedgerId());
