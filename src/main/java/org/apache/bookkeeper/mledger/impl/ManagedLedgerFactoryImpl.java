@@ -221,7 +221,7 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
 
     @Override
     public void delete(String name) throws InterruptedException, ManagedLedgerException {
-        ManagedLedgerImpl ledger = (ManagedLedgerImpl) openReadOnly(name);
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) open(name);
         ledgers.remove(ledger.getName());
         ledger.delete();
     }
