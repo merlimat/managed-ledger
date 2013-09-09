@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,15 +35,18 @@ class EntryCacheManager {
 
     private final AtomicBoolean evictionInProgress = new AtomicBoolean(false);
 
+    protected final ManagedLedgerFactoryMBeanImpl mlFactoryMBean;
+
     protected static final double MB = 1024 * 1024;
 
     /** 
      * 
      */
-    public EntryCacheManager(ManagedLedgerFactoryConfig config) {
-        this.maxSize = config.getMaxCacheSize();
-        this.cacheEvictionWatermak = config.getCacheEvictionWatermark();
+    public EntryCacheManager(ManagedLedgerFactoryImpl factory) {
+        this.maxSize = factory.getConfig().getMaxCacheSize();
+        this.cacheEvictionWatermak = factory.getConfig().getCacheEvictionWatermark();
         this.evictionPolicy = new EntryCacheDefaultEvictionPolicy();
+        this.mlFactoryMBean = factory.mbean;
 
         log.info("Initialized managed-ledger entry cache of {} Mb", maxSize / MB);
     }
@@ -77,7 +79,14 @@ class EntryCacheManager {
             long sizeToEvict = totalSize - (long) (maxSize * cacheEvictionWatermak);
             log.info("Triggering cache eviction. total size: {} Mb -- Need to discard: {} Mb", totalSize / MB,
                     sizeToEvict / MB);
-            evictionPolicy.doEviction(Lists.newArrayList(caches.values()), sizeToEvict);
+
+            try {
+                evictionPolicy.doEviction(Lists.newArrayList(caches.values()), sizeToEvict);
+                log.info("Eviction completed. New cache size: {} Mb", currentSize.get() / MB);
+            } finally {
+                mlFactoryMBean.recordCacheEviction();
+                evictionInProgress.set(false);
+            }
         }
     }
 
@@ -87,6 +96,10 @@ class EntryCacheManager {
 
     public long getSize() {
         return currentSize.get();
+    }
+
+    public long getMaxSize() {
+        return maxSize;
     }
 
     private static final Logger log = LoggerFactory.getLogger(EntryCacheManager.class);

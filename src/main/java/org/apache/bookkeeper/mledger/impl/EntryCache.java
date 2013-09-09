@@ -15,6 +15,7 @@ package org.apache.bookkeeper.mledger.impl;
 
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
+import org.apache.bookkeeper.mledger.util.Pair;
 
 /**
  * Cache of entries used by a single ManagedLedger. An EntryCache is compared to other EntryCache instances using their
@@ -64,9 +65,9 @@ public interface EntryCache extends Comparable<EntryCache> {
      * 
      * @param sizeToFree
      *            the total memory size to free
-     * @return the number of evicted entries
+     * @return a pair containing the number of entries evicted and their total size
      */
-    int evictEntries(long sizeToFree);
+    Pair<Integer, Long> evictEntries(long sizeToFree);
 
     /**
      * Read entries from the cache or from bookkeeper.

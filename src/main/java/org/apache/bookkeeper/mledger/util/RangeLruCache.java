@@ -159,9 +159,9 @@ public class RangeLruCache<Key extends Comparable<Key>, Value> {
     /**
      * 
      * @param minSize
-     * @return
+     * @return a pair containing the number of entries evicted and their total size
      */
-    public synchronized int evictLeastAccessedEntries(long minSize) {
+    public synchronized Pair<Integer, Long> evictLeastAccessedEntries(long minSize) {
         checkArgument(minSize > 0);
 
         long removedSize = 0;
@@ -177,7 +177,7 @@ public class RangeLruCache<Key extends Comparable<Key>, Value> {
         }
 
         size.addAndGet(-removedSize);
-        return removedEntries;
+        return Pair.create(removedEntries, removedSize);
     }
 
     public long getNumberOfEntries() {

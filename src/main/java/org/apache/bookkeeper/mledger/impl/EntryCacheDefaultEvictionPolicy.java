@@ -18,9 +18,11 @@ import static com.google.common.base.Preconditions.checkArgument;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.bookkeeper.mledger.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testng.collections.Lists;
+
+import com.google.common.collect.Lists;
 
 /**
  * Default eviction policy.
@@ -67,16 +69,20 @@ public class EntryCacheDefaultEvictionPolicy implements EntryCacheEvictionPolicy
             log.debug("Added cache {} with size {}", entryCache.getName(), entryCache.getSize());
         }
 
-        int removedEntries = 0;
+        int evictedEntries = 0;
+        long evictedSize = 0;
 
         for (EntryCache entryCache : cachesToEvict) {
             // To each entryCache choosen to for eviction, we'll ask to evict a proportional amount of data
             long singleCacheSizeToFree = (long) (sizeToFree * (entryCache.getSize() / (double) cachesToEvictTotalSize));
-            removedEntries += entryCache.evictEntries(singleCacheSizeToFree);
+
+            Pair<Integer, Long> evicted = entryCache.evictEntries(singleCacheSizeToFree);
+            evictedEntries += evicted.first;
+            evictedSize += evicted.second;
         }
 
-        log.info("Completed cache eviction. Removed {} entries. ({} Mb). New cache size: {}", removedEntries,
-                sizeToFree / EntryCacheManager.MB / EntryCacheManager.MB);
+        log.info("Completed cache eviction. Removed {} entries. ({} Mb)", evictedEntries, evictedSize
+                / EntryCacheManager.MB);
     }
 
     private static final Logger log = LoggerFactory.getLogger(EntryCacheDefaultEvictionPolicy.class);

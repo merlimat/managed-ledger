@@ -127,7 +127,7 @@ public class RangeLruCacheTest {
         cache.put(3, "three");
 
         // This should remove the LRU entries: 0, 1 whose combined size is 7
-        assertEquals(cache.evictLeastAccessedEntries(5), 2);
+        assertEquals(cache.evictLeastAccessedEntries(5), Pair.create(2, (long) 7));
 
         assertEquals(cache.getNumberOfEntries(), 2);
         assertEquals(cache.getSize(), 8);
@@ -136,7 +136,7 @@ public class RangeLruCacheTest {
         assertEquals(cache.get(2), "two");
         assertEquals(cache.get(3), "three");
 
-        assertEquals(cache.evictLeastAccessedEntries(100), 2);
+        assertEquals(cache.evictLeastAccessedEntries(100), Pair.create(2, (long) 8));
         assertEquals(cache.getNumberOfEntries(), 0);
         assertEquals(cache.getSize(), 0);
         assertEquals(cache.get(0), null);

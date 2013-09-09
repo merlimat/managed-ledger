@@ -16,26 +16,37 @@ package org.apache.bookkeeper.mledger.impl;
 import static org.testng.Assert.assertEquals;
 
 import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
+import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.testng.annotations.Test;
 
 @Test
-public class EntryCacheManagerTest {
+public class EntryCacheManagerTest extends MockedBookKeeperTestCase {
 
     @Test
-    void simple() {
+    void simple() throws Exception {
         ManagedLedgerFactoryConfig config = new ManagedLedgerFactoryConfig();
         config.setMaxCacheSize(10);
         config.setCacheEvictionWatermark(0.8);
 
-        EntryCacheManager cacheManager = new EntryCacheManager(config);
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle(), config);
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
         EntryCache cache1 = cacheManager.getEntryCache("cache1");
         EntryCache cache2 = cacheManager.getEntryCache("cache2");
 
-        cache1.insert(new EntryImpl(1, 0, new byte[3]));
         cache1.insert(new EntryImpl(1, 1, new byte[4]));
+        cache1.insert(new EntryImpl(1, 0, new byte[3]));
 
         assertEquals(cache1.getSize(), 7);
         assertEquals(cacheManager.getSize(), 7);
+        
+        cacheManager.mlFactoryMBean.refreshStats();
+        assertEquals(cacheManager.mlFactoryMBean.getCacheMaxSize(), 10);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheUsedSize(), 7);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheHitsRate(), 0.0);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheMissesRate(), 0.0);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheHitsThroughput(), 0.0);
+        assertEquals(cacheManager.mlFactoryMBean.getNumberOfCacheEvictions(), 0);
 
         cache2.insert(new EntryImpl(2, 0, new byte[1]));
         cache2.insert(new EntryImpl(2, 1, new byte[1]));
@@ -49,16 +60,25 @@ public class EntryCacheManagerTest {
         cache2.insert(new EntryImpl(2, 3, new byte[1]));
 
         assertEquals(cacheManager.getSize(), 7);
-        assertEquals(cache1.getSize(), 4);
-        assertEquals(cache2.getSize(), 3);
-        
+        assertEquals(cache1.getSize(), 3);
+        assertEquals(cache2.getSize(), 4);
+
         cacheManager.removeEntryCache("cache1");
-        assertEquals(cacheManager.getSize(), 3);
-        assertEquals(cache2.getSize(), 3);
-        
+        assertEquals(cacheManager.getSize(), 4);
+        assertEquals(cache2.getSize(), 4);
+
         // Should remove 2 entries
         cache2.invalidateEntries(new PositionImpl(2, 1));
-        assertEquals(cacheManager.getSize(), 1);
-        assertEquals(cache2.getSize(), 1);
+        assertEquals(cacheManager.getSize(), 2);
+        assertEquals(cache2.getSize(), 2);
+        
+        cacheManager.mlFactoryMBean.refreshStats();
+        
+        assertEquals(cacheManager.mlFactoryMBean.getCacheMaxSize(), 10);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheUsedSize(), 2);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheHitsRate(), 0.0);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheMissesRate(), 0.0);
+        assertEquals(cacheManager.mlFactoryMBean.getCacheHitsThroughput(), 0.0);
+        assertEquals(cacheManager.mlFactoryMBean.getNumberOfCacheEvictions(), 1);
     }
 }

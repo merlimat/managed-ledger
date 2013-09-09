@@ -2,11 +2,7 @@ package org.apache.bookkeeper.mledger.impl;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.testng.Assert.assertEquals;
 
 import java.util.List;
@@ -20,20 +16,23 @@ import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.mledger.AsyncCallbacks.ReadEntriesCallback;
 import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
-import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
+import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
+import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 @Test
-public class EntryCacheTest {
+public class EntryCacheTest extends MockedBookKeeperTestCase {
     @Test(timeOut = 5000)
     void testRead() throws Exception {
         LedgerHandle lh = getLedgerHandle();
         when(lh.getId()).thenReturn((long) 0);
 
-        EntryCacheManager cacheManager = new EntryCacheManager(new ManagedLedgerFactoryConfig());
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -64,7 +63,9 @@ public class EntryCacheTest {
         LedgerHandle lh = getLedgerHandle();
         when(lh.getId()).thenReturn((long) 0);
 
-        EntryCacheManager cacheManager = new EntryCacheManager(new ManagedLedgerFactoryConfig());
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -92,7 +93,9 @@ public class EntryCacheTest {
         LedgerHandle lh = getLedgerHandle();
         when(lh.getId()).thenReturn((long) 0);
 
-        EntryCacheManager cacheManager = new EntryCacheManager(new ManagedLedgerFactoryConfig());
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -120,7 +123,9 @@ public class EntryCacheTest {
         LedgerHandle lh = getLedgerHandle();
         when(lh.getId()).thenReturn((long) 0);
 
-        EntryCacheManager cacheManager = new EntryCacheManager(new ManagedLedgerFactoryConfig());
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -149,7 +154,9 @@ public class EntryCacheTest {
         LedgerHandle lh = getLedgerHandle();
         when(lh.getId()).thenReturn((long) 0);
 
-        EntryCacheManager cacheManager = new EntryCacheManager(new ManagedLedgerFactoryConfig());
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -187,7 +194,9 @@ public class EntryCacheTest {
             }
         }).when(lh).asyncReadEntries(anyLong(), anyLong(), any(ReadCallback.class), any());
 
-        EntryCacheManager cacheManager = new EntryCacheManager(new ManagedLedgerFactoryConfig());
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+
+        EntryCacheManager cacheManager = factory.entryCacheManager;
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -209,7 +218,10 @@ public class EntryCacheTest {
 
     private static LedgerHandle getLedgerHandle() {
         final LedgerHandle lh = mock(LedgerHandle.class);
-        final LedgerEntry ledgerEntry = mock(LedgerEntry.class);
+        final LedgerEntry ledgerEntry = mock(LedgerEntry.class, Mockito.CALLS_REAL_METHODS);
+        doReturn(new byte[10]).when(ledgerEntry).getEntry();
+        doReturn((long) 10).when(ledgerEntry).getLength();
+
         doAnswer(new Answer<Object>() {
             public Object answer(InvocationOnMock invocation) {
                 Object[] args = invocation.getArguments();

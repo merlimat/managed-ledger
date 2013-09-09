@@ -71,7 +71,7 @@ public class EntryCacheImpl implements EntryCache {
 
     @Override
     public void insert(EntryImpl entry) {
-        log.debug("Adding entry to cache: {}", entry.getPosition());
+        log.debug("[{}] Adding entry to cache: {}", name, entry.getPosition());
         entries.put(entry.getPosition(), entry);
         manager.entryAdded(entry.getLength());
     }
@@ -118,6 +118,7 @@ public class EntryCacheImpl implements EntryCache {
             entriesToReturn.add(entry);
             log.debug("Found entry: {}", entryId);
             availablePositions.add(Range.closedOpen(entryId, entryId + 1));
+            manager.mlFactoryMBean.recordCacheHit(entry.getLength());
         }
 
         log.debug("[{}] Ledger {} -- entries: {}-{} -- found in cache: {}", name, ledgerId, firstEntry, lastEntry,
@@ -151,7 +152,9 @@ public class EntryCacheImpl implements EntryCache {
                     // We got the entries, we need to transform them to a List<> type
                     while (sequence.hasMoreElements()) {
                         // Insert the entries at the end of the list (they will be unsorted for now)
-                        entriesToReturn.add(new EntryImpl(sequence.nextElement()));
+                        EntryImpl entry = new EntryImpl(sequence.nextElement());
+                        entriesToReturn.add(entry);
+                        manager.mlFactoryMBean.recordCacheMiss(entry.getLength());
                     }
 
                     if (--pendingCallbacks == 0) {
@@ -193,12 +196,15 @@ public class EntryCacheImpl implements EntryCache {
     }
 
     @Override
-    public int evictEntries(long sizeToFree) {
+    public Pair<Integer,Long> evictEntries(long sizeToFree) {
         checkArgument(sizeToFree > 0);
-        int deletedEntries = entries.evictLeastAccessedEntries(sizeToFree);
-        log.info("[{}] Doing cache eviction of at least {} Mb -- Deleted {} entries", name, sizeToFree / MB,
-                deletedEntries);
-        return deletedEntries;
+        Pair<Integer, Long> evicted = entries.evictLeastAccessedEntries(sizeToFree);
+        int evictedEntries = evicted.first;
+        long evictedSize = evicted.second;
+        log.info("[{}] Doing cache eviction of at least {} Mb -- Deleted {} entries - Total size: {} Mb", name,
+                sizeToFree / MB, evictedEntries, evictedSize / MB);
+        manager.entriesRemoved(evictedSize);
+        return evicted;
     }
 
     private static final Logger log = LoggerFactory.getLogger(EntryCacheImpl.class);
