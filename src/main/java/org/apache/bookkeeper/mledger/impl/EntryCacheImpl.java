@@ -116,7 +116,6 @@ public class EntryCacheImpl implements EntryCache {
         for (EntryImpl entry : entries.getRange(firstPosition, lastPosition)) {
             long entryId = entry.getPosition().getEntryId();
             entriesToReturn.add(entry);
-            log.debug("Found entry: {}", entryId);
             availablePositions.add(Range.closedOpen(entryId, entryId + 1));
             manager.mlFactoryMBean.recordCacheHit(entry.getLength());
         }
@@ -155,6 +154,9 @@ public class EntryCacheImpl implements EntryCache {
                         EntryImpl entry = new EntryImpl(sequence.nextElement());
                         entriesToReturn.add(entry);
                         manager.mlFactoryMBean.recordCacheMiss(entry.getLength());
+
+                        // Cache the entry
+                        insert(entry);
                     }
 
                     if (--pendingCallbacks == 0) {
@@ -196,7 +198,7 @@ public class EntryCacheImpl implements EntryCache {
     }
 
     @Override
-    public Pair<Integer,Long> evictEntries(long sizeToFree) {
+    public Pair<Integer, Long> evictEntries(long sizeToFree) {
         checkArgument(sizeToFree > 0);
         Pair<Integer, Long> evicted = entries.evictLeastAccessedEntries(sizeToFree);
         int evictedEntries = evicted.first;

@@ -14,6 +14,7 @@
 package org.apache.bookkeeper.mledger.impl;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Collections.reverseOrder;
 
 import java.util.Collections;
 import java.util.List;
@@ -41,8 +42,7 @@ public class EntryCacheDefaultEvictionPolicy implements EntryCacheEvictionPolicy
         checkArgument(sizeToFree > 0);
         checkArgument(!caches.isEmpty());
 
-        Collections.sort(caches);
-        Collections.reverse(caches);
+        Collections.sort(caches, reverseOrder());
 
         long totalSize = 0;
         for (EntryCache cache : caches) {
