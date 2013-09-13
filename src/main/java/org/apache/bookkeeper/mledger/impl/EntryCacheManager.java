@@ -36,7 +36,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.primitives.Longs;
 
-class EntryCacheManager {
+public class EntryCacheManager {
 
     private final long maxSize;
     private final double cacheEvictionWatermak;
@@ -62,7 +62,7 @@ class EntryCacheManager {
         log.info("Initialized managed-ledger entry cache of {} Mb", maxSize / MB);
     }
 
-    EntryCache getEntryCache(String name) {
+    public EntryCache getEntryCache(String name) {
         if (maxSize == 0) {
             // Cache is disabled
             return new EntryCacheDisabled(name);

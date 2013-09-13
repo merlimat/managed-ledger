@@ -32,7 +32,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -65,7 +65,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -95,7 +95,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -125,7 +125,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -156,7 +156,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];
@@ -196,7 +196,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache entryCache = cacheManager.getEntryCache("name");
 
         byte[] data = new byte[10];

@@ -62,7 +62,7 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
     private ObjectName mbeanObjectName;
 
     protected final ConcurrentMap<String, ManagedLedgerImpl> ledgers = Maps.newConcurrentMap();
-    protected final EntryCacheManager entryCacheManager;
+    private final EntryCacheManager entryCacheManager;
 
     public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration) throws Exception {
         this(bkClientConfiguration, new ManagedLedgerFactoryConfig());
@@ -305,6 +305,10 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
 
     public ManagedLedgerFactoryConfig getConfig() {
         return config;
+    }
+
+    public EntryCacheManager getEntryCacheManager() {
+        return entryCacheManager;
     }
 
     private void registerMBean() throws Exception {

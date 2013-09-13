@@ -1341,7 +1341,7 @@ public class ManagedLedgerTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
         ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open("my_test_ledger");
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache entryCache = ledger.entryCache;
 
         ManagedCursor c1 = ledger.openCursor("c1");

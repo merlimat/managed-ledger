@@ -67,12 +67,12 @@ public class ManagedLedgerFactoryMBeanImpl implements ManagedLedgerFactoryMXBean
 
     @Override
     public long getCacheUsedSize() {
-        return factory.entryCacheManager.getSize();
+        return factory.getEntryCacheManager().getSize();
     }
 
     @Override
     public long getCacheMaxSize() {
-        return factory.entryCacheManager.getMaxSize();
+        return factory.getEntryCacheManager().getMaxSize();
     }
 
     @Override

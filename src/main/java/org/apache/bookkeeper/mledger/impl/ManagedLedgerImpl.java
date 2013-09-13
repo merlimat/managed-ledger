@@ -168,7 +168,7 @@ class ManagedLedgerImpl implements ManagedLedger, CreateCallback, OpenCallback {
         this.ledgerCache = CacheBuilder.newBuilder().expireAfterAccess(60, TimeUnit.SECONDS)
                 .removalListener(removalListener).build();
 
-        this.entryCache = factory.entryCacheManager.getEntryCache(name);
+        this.entryCache = factory.getEntryCacheManager().getEntryCache(name);
     }
 
     private void registerMBean(final OpenMode openMode, ManagedLedgerInitializeLedgerCallback callback) {

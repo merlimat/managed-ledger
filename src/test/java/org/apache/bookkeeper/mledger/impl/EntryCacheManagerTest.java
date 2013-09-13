@@ -31,7 +31,7 @@ public class EntryCacheManagerTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle(), config);
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache cache1 = cacheManager.getEntryCache("cache1");
         EntryCache cache2 = cacheManager.getEntryCache("cache2");
 
@@ -91,7 +91,7 @@ public class EntryCacheManagerTest extends MockedBookKeeperTestCase {
 
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle(), config);
 
-        EntryCacheManager cacheManager = factory.entryCacheManager;
+        EntryCacheManager cacheManager = factory.getEntryCacheManager();
         EntryCache cache1 = cacheManager.getEntryCache("cache1");
         EntryCache cache2 = cacheManager.getEntryCache("cache2");
 
