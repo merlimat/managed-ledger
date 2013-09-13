@@ -13,6 +13,8 @@
  */
 package org.apache.bookkeeper.mledger.util;
 
+import com.google.common.base.Objects;
+
 public class Pair<A, B> {
     public final A first;
     public final B second;
@@ -29,5 +31,16 @@ public class Pair<A, B> {
     @Override
     public String toString() {
         return String.format("(%s,%s)", first, second);
+    }
+
+    @Override
+    @SuppressWarnings("rawtypes")
+    public boolean equals(Object obj) {
+        if (obj instanceof Pair) {
+            Pair other = (Pair) obj;
+            return Objects.equal(first, other.first) && Objects.equal(second, other.second);
+        }
+
+        return false;
     }
 }

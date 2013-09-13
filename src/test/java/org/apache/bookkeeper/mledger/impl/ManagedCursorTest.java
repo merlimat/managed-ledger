@@ -32,6 +32,7 @@ import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
+import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
 import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
 import org.slf4j.Logger;
@@ -78,12 +79,33 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         ledger.addEntry("entry-1".getBytes(Encoding));
         ledger.addEntry("entry-2".getBytes(Encoding));
 
-        assertEquals(c1.readEntries(2).size(), 1);
-        assertEquals(c1.readEntries(2).size(), 1);
+        assertEquals(c1.readEntries(2).size(), 2);
         assertEquals(c1.readEntries(2).size(), 0);
 
-        assertEquals(c2.readEntries(2).size(), 1);
-        assertEquals(c2.readEntries(2).size(), 1);
+        assertEquals(c2.readEntries(2).size(), 2);
+        assertEquals(c2.readEntries(2).size(), 0);
+    }
+
+    @Test(timeOut = 20000)
+    void readWithCacheDisabled() throws Exception {
+        ManagedLedgerFactoryConfig config = new ManagedLedgerFactoryConfig();
+        config.setMaxCacheSize(0);
+        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle(), config);
+        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(1));
+
+        ManagedCursor c1 = ledger.openCursor("c1");
+        ManagedCursor c2 = ledger.openCursor("c2");
+
+        ledger.addEntry("entry-1".getBytes(Encoding));
+        ledger.addEntry("entry-2".getBytes(Encoding));
+
+        List<Entry> entries = c1.readEntries(2);
+        assertEquals(entries.size(), 2);
+        assertEquals(new String(entries.get(0).getData(), Encoding), "entry-1");
+        assertEquals(new String(entries.get(1).getData(), Encoding), "entry-2");
+        assertEquals(c1.readEntries(2).size(), 0);
+
+        assertEquals(c2.readEntries(2).size(), 2);
         assertEquals(c2.readEntries(2).size(), 0);
     }
 
@@ -215,8 +237,8 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
 
     @Test(timeOut = 20000)
     void asyncReadWithErrors() throws Exception {
-        ManagedLedgerFactory factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
-        ManagedLedger ledger = factory.open("my_test_ledger");
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedgerImpl ledger = (ManagedLedgerImpl) factory.open("my_test_ledger");
         ManagedCursor cursor = ledger.openCursor("c1");
 
         ledger.addEntry("dummy-entry-1".getBytes(Encoding));
@@ -227,16 +249,36 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
 
         cursor.asyncReadEntries(100, new ReadEntriesCallback() {
             public void readEntriesComplete(List<Entry> entries, Object ctx) {
-                fail("async-call should have failed");
+                counter.countDown();
             }
 
             public void readEntriesFailed(ManagedLedgerException exception, Object ctx) {
-                counter.countDown();
+                fail("async-call should not have failed");
             }
 
         }, null);
 
         counter.await();
+
+        cursor.rewind();
+
+        // Clear the cache to force reading from BK
+        ledger.entryCache.clear();
+
+        final CountDownLatch counter2 = new CountDownLatch(1);
+
+        cursor.asyncReadEntries(100, new ReadEntriesCallback() {
+            public void readEntriesComplete(List<Entry> entries, Object ctx) {
+                fail("async-call should have failed");
+            }
+
+            public void readEntriesFailed(ManagedLedgerException exception, Object ctx) {
+                counter2.countDown();
+            }
+
+        }, null);
+
+        counter2.await();
     }
 
     @Test(timeOut = 20000, expectedExceptions = IllegalArgumentException.class)
@@ -416,14 +458,14 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         assertEquals(c1.getNumberOfEntries(), 4);
         c1.markDelete(p1);
         assertEquals(c1.getNumberOfEntries(), 3);
-        assertEquals(c1.readEntries(10).size(), 1);
-        assertEquals(c1.getNumberOfEntries(), 2);
+        assertEquals(c1.readEntries(10).size(), 3);
+        assertEquals(c1.getNumberOfEntries(), 0);
         c1.rewind();
         assertEquals(c1.getNumberOfEntries(), 3);
         c1.markDelete(p2);
         assertEquals(c1.getNumberOfEntries(), 2);
-        assertEquals(c1.readEntries(10).size(), 0);
         assertEquals(c1.readEntries(10).size(), 2);
+        assertEquals(c1.readEntries(10).size(), 0);
         assertEquals(c1.getNumberOfEntries(), 0);
         c1.rewind();
         assertEquals(c1.getNumberOfEntries(), 2);

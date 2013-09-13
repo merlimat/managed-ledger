@@ -15,18 +15,21 @@ package org.apache.bookkeeper.mledger.impl;
 
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.mledger.Entry;
-import org.apache.bookkeeper.mledger.Position;
 
-class EntryImpl implements Entry {
+final class EntryImpl implements Entry, Comparable<EntryImpl> {
 
-    private final long ledgerId;
-    private final long entryId;
-    private byte[] data;
+    private final PositionImpl position;
+    private final byte[] data;
 
     EntryImpl(LedgerEntry ledgerEntry) {
-        this.ledgerId = ledgerEntry.getLedgerId();
-        this.entryId = ledgerEntry.getEntryId();
+        this.position = new PositionImpl(ledgerEntry.getLedgerId(), ledgerEntry.getEntryId());
         this.data = ledgerEntry.getEntry();
+    }
+
+    // Used just for tests
+    EntryImpl(long ledgerId, long entryId, byte[] data) {
+        this.position = new PositionImpl(ledgerId, entryId);
+        this.data = data;
     }
 
     @Override
@@ -40,8 +43,12 @@ class EntryImpl implements Entry {
     }
 
     @Override
-    public Position getPosition() {
-        return new PositionImpl(ledgerId, entryId);
+    public PositionImpl getPosition() {
+        return position;
     }
 
+    @Override
+    public int compareTo(EntryImpl other) {
+        return position.compareTo(other.getPosition());
+    }
 }

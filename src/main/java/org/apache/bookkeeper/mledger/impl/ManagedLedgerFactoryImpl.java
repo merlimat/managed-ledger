@@ -15,11 +15,15 @@ package org.apache.bookkeeper.mledger.impl;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.lang.management.ManagementFactory;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeper;
@@ -30,6 +34,7 @@ import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
+import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl.ManagedLedgerInitializeLedgerCallback;
 import org.apache.bookkeeper.mledger.impl.MetaStore.OpenMode;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
@@ -48,13 +53,23 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
     private final BookKeeper bookKeeper;
     private final boolean isBookkeeperManaged;
     private final ZooKeeper zookeeper;
+    private final ManagedLedgerFactoryConfig config;
     protected final ScheduledExecutorService executor = Executors.newScheduledThreadPool(5, new ThreadFactoryBuilder()
             .setNameFormat("bookkeeper-ml-%s").build());
     private final OrderedSafeExecutor orderedExecutor = new OrderedSafeExecutor(5, "bookkeper-ml-workers");
 
+    protected final ManagedLedgerFactoryMBeanImpl mbean;
+    private ObjectName mbeanObjectName;
+
     protected final ConcurrentMap<String, ManagedLedgerImpl> ledgers = Maps.newConcurrentMap();
+    protected final EntryCacheManager entryCacheManager;
 
     public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration) throws Exception {
+        this(bkClientConfiguration, new ManagedLedgerFactoryConfig());
+    }
+
+    public ManagedLedgerFactoryImpl(ClientConfiguration bkClientConfiguration, ManagedLedgerFactoryConfig config)
+            throws Exception {
         final CountDownLatch counter = new CountDownLatch(1);
         final String zookeeperQuorum = checkNotNull(bkClientConfiguration.getZkServers());
 
@@ -79,13 +94,28 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
         this.isBookkeeperManaged = true;
 
         this.store = new MetaStoreImplZookeeper(zookeeper);
+
+        this.config = config;
+        this.mbean = new ManagedLedgerFactoryMBeanImpl(this);
+        this.entryCacheManager = new EntryCacheManager(this);
+
+        registerMBean();
     }
 
     public ManagedLedgerFactoryImpl(BookKeeper bookKeeper, ZooKeeper zooKeeper) throws Exception {
+        this(bookKeeper, zooKeeper, new ManagedLedgerFactoryConfig());
+    }
+
+    public ManagedLedgerFactoryImpl(BookKeeper bookKeeper, ZooKeeper zooKeeper, ManagedLedgerFactoryConfig config)
+            throws Exception {
         this.bookKeeper = bookKeeper;
         this.isBookkeeperManaged = false;
         this.zookeeper = null;
         this.store = new MetaStoreImplZookeeper(zooKeeper);
+        this.config = config;
+        this.mbean = new ManagedLedgerFactoryMBeanImpl(this);
+        this.entryCacheManager = new EntryCacheManager(this);
+        registerMBean();
     }
 
     @Override
@@ -248,6 +278,7 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
 
     @Override
     public void shutdown() throws InterruptedException, ManagedLedgerException {
+        unregisterMBean();
         executor.shutdown();
 
         for (ManagedLedger ledger : ledgers.values()) {
@@ -270,6 +301,31 @@ public class ManagedLedgerFactoryImpl implements ManagedLedgerFactory {
 
     public MetaStore getMetaStore() {
         return store;
+    }
+
+    public ManagedLedgerFactoryConfig getConfig() {
+        return config;
+    }
+
+    private void registerMBean() throws Exception {
+        MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+
+        try {
+            mbeanObjectName = new ObjectName("org.apache.bookkeeper.mledger:type=ManagedLedger,factory="
+                    + this.hashCode());
+            mBeanServer.registerMBean(mbean, mbeanObjectName);
+        } catch (Exception e) {
+            log.error("Failed to register ManagedLedger MBean for ML factory", e);
+            throw e;
+        }
+    }
+
+    private void unregisterMBean() {
+        try {
+            ManagementFactory.getPlatformMBeanServer().unregisterMBean(mbeanObjectName);
+        } catch (Exception e) {
+            log.error("Error unregistering mbean for ML factory", e);
+        }
     }
 
     private static final Logger log = LoggerFactory.getLogger(ManagedLedgerFactoryImpl.class);
