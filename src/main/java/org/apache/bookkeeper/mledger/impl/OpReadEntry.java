@@ -84,7 +84,6 @@ public class OpReadEntry implements ReadEntriesCallback {
             // The reading was already completed, release resources and trigger callback
             cursor.ledger.endReadOperationOnLedger(readPosition.getLedgerId());
             callback.readEntriesComplete(entries, ctx);
-            cursor.ledger.mbean.addReadEntriesSample(entries);
         }
     }
 

@@ -2,12 +2,19 @@ package org.apache.bookkeeper.mledger.impl;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 
 import java.util.List;
 import java.util.Vector;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.apache.bookkeeper.client.AsyncCallback.ReadCallback;
 import org.apache.bookkeeper.client.BKException;
@@ -21,10 +28,24 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.testng.Assert;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 @Test
 public class EntryCacheTest extends MockedBookKeeperTestCase {
+
+    ManagedLedgerMBeanImpl mbean;
+
+    @BeforeClass
+    void setup() throws Exception {
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
+        ManagedLedgerImpl ml = mock(ManagedLedgerImpl.class);
+        when(ml.getExecutor()).thenReturn(executor);
+
+        mbean = new ManagedLedgerMBeanImpl(ml);
+    }
+
     @Test(timeOut = 5000)
     void testRead() throws Exception {
         LedgerHandle lh = getLedgerHandle();
@@ -33,7 +54,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache entryCache = cacheManager.getEntryCache("name");
+        EntryCache entryCache = cacheManager.getEntryCache("name", mbean);
 
         byte[] data = new byte[10];
         for (int i = 0; i < 10; i++) {
@@ -66,7 +87,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache entryCache = cacheManager.getEntryCache("name");
+        EntryCache entryCache = cacheManager.getEntryCache("name", mbean);
 
         byte[] data = new byte[10];
         for (int i = 3; i < 10; i++) {
@@ -96,7 +117,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache entryCache = cacheManager.getEntryCache("name");
+        EntryCache entryCache = cacheManager.getEntryCache("name", mbean);
 
         byte[] data = new byte[10];
         for (int i = 0; i < 8; i++) {
@@ -126,7 +147,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache entryCache = cacheManager.getEntryCache("name");
+        EntryCache entryCache = cacheManager.getEntryCache("name", mbean);
 
         byte[] data = new byte[10];
         entryCache.insert(new EntryImpl(0, 0, data));
@@ -157,7 +178,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache entryCache = cacheManager.getEntryCache("name");
+        EntryCache entryCache = cacheManager.getEntryCache("name", mbean);
 
         byte[] data = new byte[10];
         entryCache.insert(new EntryImpl(0, 0, data));
@@ -197,7 +218,7 @@ public class EntryCacheTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache entryCache = cacheManager.getEntryCache("name");
+        EntryCache entryCache = cacheManager.getEntryCache("name", mbean);
 
         byte[] data = new byte[10];
         entryCache.insert(new EntryImpl(0, 2, data));

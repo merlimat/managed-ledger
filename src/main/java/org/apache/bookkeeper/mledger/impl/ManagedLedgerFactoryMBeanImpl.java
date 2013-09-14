@@ -48,10 +48,10 @@ public class ManagedLedgerFactoryMBeanImpl implements ManagedLedgerFactoryMXBean
         stats.cacheHitsSize.addAndGet(size);
     }
 
-    public void recordCacheMiss(long size) {
+    public void recordCacheMiss(int count, long totalSize) {
         RecordedStats stats = currentPeriod.get();
-        stats.cacheMissesCount.incrementAndGet();
-        stats.cacheMissesSize.addAndGet(size);
+        stats.cacheMissesCount.addAndGet(count);
+        stats.cacheMissesSize.addAndGet(totalSize);
     }
 
     public void recordCacheEviction() {

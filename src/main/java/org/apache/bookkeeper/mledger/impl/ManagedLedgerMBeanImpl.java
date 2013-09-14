@@ -13,12 +13,10 @@
  */
 package org.apache.bookkeeper.mledger.impl;
 
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedgerMXBean;
 import org.apache.bookkeeper.mledger.util.StatsBuckets;
@@ -77,15 +75,10 @@ public class ManagedLedgerMBeanImpl implements ManagedLedgerMXBean {
         currentPeriod.get().addEntryLatencyStatsMs.addValue(latencyMs);
     }
 
-    public void addReadEntriesSample(List<Entry> entries) {
-        long totalSize = 0;
-        for (Entry entry : entries) {
-            totalSize += entry.getLength();
-        }
-
+    public void addReadEntriesSample(int count, long totalSize) {
         RecordedStats stats = currentPeriod.get();
         stats.readEntriesOpsSucceeded.incrementAndGet();
-        stats.readEntriesMsgCount.addAndGet(entries.size());
+        stats.readEntriesMsgCount.addAndGet(count);
         stats.readEntriesSize.addAndGet(totalSize);
     }
 

@@ -45,6 +45,7 @@ import com.google.common.primitives.Longs;
 public class EntryCacheImpl implements EntryCache {
 
     private final EntryCacheManager manager;
+    private final ManagedLedgerMBeanImpl mlMbean;
     private final String name;
     private final RangeLruCache<PositionImpl, EntryImpl> entries;
 
@@ -56,10 +57,11 @@ public class EntryCacheImpl implements EntryCache {
         }
     };
 
-    public EntryCacheImpl(EntryCacheManager manager, String name) {
+    public EntryCacheImpl(EntryCacheManager manager, String name, ManagedLedgerMBeanImpl mlMbean) {
         this.manager = manager;
         this.name = name;
         this.entries = new RangeLruCache<PositionImpl, EntryImpl>(entryWeighter);
+        this.mlMbean = mlMbean;
 
         log.info("[{}] Initialized managed-ledger entry cache", this.name);
     }
@@ -149,15 +151,22 @@ public class EntryCacheImpl implements EntryCache {
                     }
 
                     // We got the entries, we need to transform them to a List<> type
+                    int entriesCount = 0;
+                    long totalSize = 0;
                     while (sequence.hasMoreElements()) {
                         // Insert the entries at the end of the list (they will be unsorted for now)
                         EntryImpl entry = new EntryImpl(sequence.nextElement());
                         entriesToReturn.add(entry);
-                        manager.mlFactoryMBean.recordCacheMiss(entry.getLength());
 
                         // Cache the entry
                         insert(entry);
+
+                        ++entriesCount;
+                        totalSize += entry.getLength();
                     }
+
+                    manager.mlFactoryMBean.recordCacheMiss(entriesCount, totalSize);
+                    mlMbean.addReadEntriesSample(entriesCount, totalSize);
 
                     if (--pendingCallbacks == 0) {
                         // We have read all the entries that were missing from the cache, we need to sort the entries

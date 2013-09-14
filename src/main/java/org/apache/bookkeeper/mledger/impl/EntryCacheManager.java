@@ -62,13 +62,13 @@ public class EntryCacheManager {
         log.info("Initialized managed-ledger entry cache of {} Mb", maxSize / MB);
     }
 
-    public EntryCache getEntryCache(String name) {
+    public EntryCache getEntryCache(String name, ManagedLedgerMBeanImpl mbean) {
         if (maxSize == 0) {
             // Cache is disabled
-            return new EntryCacheDisabled(name);
+            return new EntryCacheDisabled(name, mbean);
         }
 
-        EntryCache newEntryCache = new EntryCacheImpl(this, name);
+        EntryCache newEntryCache = new EntryCacheImpl(this, name, mbean);
         EntryCache currentEntryCache = caches.putIfAbsent(name, newEntryCache);
         if (currentEntryCache != null) {
             return currentEntryCache;
@@ -121,9 +121,11 @@ public class EntryCacheManager {
     protected class EntryCacheDisabled implements EntryCache {
 
         private final String name;
+        private final ManagedLedgerMBeanImpl mlMbean;
 
-        public EntryCacheDisabled(String name) {
+        public EntryCacheDisabled(String name, ManagedLedgerMBeanImpl mlMbean) {
             this.name = name;
+            this.mlMbean = mlMbean;
         }
 
         @Override
@@ -162,12 +164,16 @@ public class EntryCacheManager {
                     }
 
                     List<Entry> entries = Lists.newArrayList();
+                    long totalSize = 0;
                     while (seq.hasMoreElements()) {
                         // Insert the entries at the end of the list (they will be unsorted for now)
                         EntryImpl entry = new EntryImpl(seq.nextElement());
                         entries.add(entry);
-                        mlFactoryMBean.recordCacheMiss(entry.getLength());
+                        totalSize += entry.getLength();
                     }
+
+                    mlFactoryMBean.recordCacheMiss(entries.size(), totalSize);
+                    mlMbean.addReadEntriesSample(entries.size(), totalSize);
 
                     callback.readEntriesComplete(entries, null);
                 }

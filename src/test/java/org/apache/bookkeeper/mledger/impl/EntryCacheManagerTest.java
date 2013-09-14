@@ -13,15 +13,33 @@
  */
 package org.apache.bookkeeper.mledger.impl;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+
 import org.apache.bookkeeper.mledger.ManagedLedgerFactoryConfig;
 import org.apache.bookkeeper.test.MockedBookKeeperTestCase;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 @Test
 public class EntryCacheManagerTest extends MockedBookKeeperTestCase {
+
+    ManagedLedgerMBeanImpl mbean;
+
+    @BeforeClass
+    void setup() throws Exception {
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
+        ManagedLedgerImpl ml = mock(ManagedLedgerImpl.class);
+        when(ml.getExecutor()).thenReturn(executor);
+
+        mbean = new ManagedLedgerMBeanImpl(ml);
+    }
 
     @Test
     void simple() throws Exception {
@@ -32,8 +50,8 @@ public class EntryCacheManagerTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle(), config);
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache cache1 = cacheManager.getEntryCache("cache1");
-        EntryCache cache2 = cacheManager.getEntryCache("cache2");
+        EntryCache cache1 = cacheManager.getEntryCache("cache1", mbean);
+        EntryCache cache2 = cacheManager.getEntryCache("cache2", mbean);
 
         cache1.insert(new EntryImpl(1, 1, new byte[4]));
         cache1.insert(new EntryImpl(1, 0, new byte[3]));
@@ -92,8 +110,8 @@ public class EntryCacheManagerTest extends MockedBookKeeperTestCase {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle(), config);
 
         EntryCacheManager cacheManager = factory.getEntryCacheManager();
-        EntryCache cache1 = cacheManager.getEntryCache("cache1");
-        EntryCache cache2 = cacheManager.getEntryCache("cache2");
+        EntryCache cache1 = cacheManager.getEntryCache("cache1", mbean);
+        EntryCache cache2 = cacheManager.getEntryCache("cache2", mbean);
 
         assertTrue(cache1 instanceof EntryCacheManager.EntryCacheDisabled);
         assertTrue(cache2 instanceof EntryCacheManager.EntryCacheDisabled);
