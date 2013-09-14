@@ -526,6 +526,8 @@ class ManagedCursorImpl implements ManagedCursor {
         PositionImpl position = (PositionImpl) pos;
         Range<PositionImpl> range = null;
 
+        PositionImpl previousPosition = ledger.getPreviousPosition(position);
+
         deletedMessagesMutex.writeLock().lock();
         try {
             if (individualDeletedMessages.contains(position)) {
@@ -534,7 +536,6 @@ class ManagedCursorImpl implements ManagedCursor {
                 return;
             }
 
-            PositionImpl previousPosition = ledger.getPreviousPosition(position);
             // Add a range (prev, pos] to the set. Adding the previous entry as an open limit to the range will make the
             // RangeSet recognize the "continuity" between adjacent Positions
             individualDeletedMessages.add(Range.openClosed(previousPosition, position));
