@@ -949,14 +949,10 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         assertEquals(cursor.getMarkDeletedPosition(), p1);
 
         cursor.delete(p3);
-        assertEquals(cursor.getMarkDeletedPosition(), p1);
 
-        try {
-            cursor.delete(p3);
-            fail("already deleted");
-        } catch (ManagedLedgerException e) {
-            // ok
-        }
+        // Delete will silently succeed
+        cursor.delete(p3);
+        assertEquals(cursor.getMarkDeletedPosition(), p1);
 
         cursor.delete(p2);
         assertEquals(cursor.getMarkDeletedPosition(), p4);
