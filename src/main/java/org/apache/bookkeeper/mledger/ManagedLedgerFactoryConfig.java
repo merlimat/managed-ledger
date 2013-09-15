@@ -15,9 +15,8 @@ package org.apache.bookkeeper.mledger;
 
 public class ManagedLedgerFactoryConfig {
     private static final long MB = 1024 * 1024;
-    private static final long GB = 1024 * MB;
 
-    private long maxCacheSize = 1 * GB;
+    private long maxCacheSize = 128 * MB;
     private double cacheEvictionWatermark = 0.90;
 
     public long getMaxCacheSize() {
