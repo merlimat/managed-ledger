@@ -50,13 +50,20 @@ public class OpReadEntry implements ReadEntriesCallback {
         // Filter the returned entries for indivual deleted messages
         log.debug("[{}] Read entries succeeded batch_size={} cumulative_size={} requested_count={}",
                 cursor.ledger.getName(), returnedEntries.size(), entries.size(), count);
-        entries.addAll(cursor.filterReadEntries(returnedEntries));
+        List<Entry> filteredEntries = cursor.filterReadEntries(returnedEntries);
+        entries.addAll(filteredEntries);
 
-        PositionImpl lastPosition = (PositionImpl) entries.get(entries.size() - 1).getPosition();
+        if (!filteredEntries.isEmpty()) {
+            PositionImpl lastPosition = (PositionImpl) filteredEntries.get(filteredEntries.size() - 1).getPosition();
 
-        // Get the "next read position", we need to advance the position taking
-        // care of ledgers boundaries
-        nextReadPosition = new PositionImpl(lastPosition.getLedgerId(), lastPosition.getEntryId() + 1);
+            // Get the "next read position", we need to advance the position taking
+            // care of ledgers boundaries
+            nextReadPosition = new PositionImpl(lastPosition.getLedgerId(), lastPosition.getEntryId() + 1);
+        } else {
+            // The filtering has left us with an empty list, we need to skip these entries and read the next block
+            nextReadPosition = new PositionImpl(readPosition.getLedgerId(), readPosition.getEntryId()
+                    + returnedEntries.size());
+        }
         checkReadCompletion();
     }
 

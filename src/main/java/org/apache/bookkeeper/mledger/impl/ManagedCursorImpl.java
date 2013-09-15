@@ -530,9 +530,9 @@ class ManagedCursorImpl implements ManagedCursor {
 
         deletedMessagesMutex.writeLock().lock();
         try {
-            if (individualDeletedMessages.contains(position)) {
-                callback.deleteFailed(new ManagedLedgerException(new IllegalArgumentException(
-                        "Position had already been deleted")), ctx);
+            if (individualDeletedMessages.contains(position) || position.compareTo(acknowledgedPosition.get()) < 0) {
+                log.debug("[{}] [{}] Position was already deleted {}", ledger.getName(), name, position);
+                callback.deleteComplete(ctx);
                 return;
             }
 
