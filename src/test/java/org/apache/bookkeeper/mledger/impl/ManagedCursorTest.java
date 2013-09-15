@@ -1000,6 +1000,29 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
     }
 
     @Test(timeOut = 20000)
+    void testReadingAllFilteredEntries() throws Exception {
+        ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
+        ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(3));
+        ManagedCursor c1 = ledger.openCursor("c1");
+        ManagedCursor c2 = ledger.openCursor("c2");
+
+        Position p1 = ledger.addEntry("entry1".getBytes());
+        Position p2 = ledger.addEntry("entry2".getBytes());
+        Position p3 = ledger.addEntry("entry3".getBytes());
+        Position p4 = ledger.addEntry("entry4".getBytes());
+        Position p5 = ledger.addEntry("entry5".getBytes());
+
+        c2.readEntries(1);
+        c2.delete(p2);
+        c2.delete(p3);
+
+        List<Entry> entries = c2.readEntries(2);
+        assertEquals(entries.size(), 2);
+        assertEquals(entries.get(0).getPosition(), p4);
+        assertEquals(entries.get(1).getPosition(), p5);
+    }
+
+    @Test(timeOut = 20000)
     void testCountingWithDeletedEntries() throws Exception {
         ManagedLedgerFactoryImpl factory = new ManagedLedgerFactoryImpl(bkc, bkc.getZkHandle());
         ManagedLedger ledger = factory.open("my_test_ledger", new ManagedLedgerConfig().setMaxEntriesPerLedger(2));
