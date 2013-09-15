@@ -84,7 +84,7 @@ public class ManagedLedgerFactoryMBeanImpl implements ManagedLedgerFactoryMXBean
     @Override
     public double getCacheMissesRate() {
         RecordedStats stats = lastCompletedPeriod.get();
-        return stats.cacheHitsCount.get() / stats.periodDuration;
+        return stats.cacheMissesCount.get() / stats.periodDuration;
     }
 
     @Override
