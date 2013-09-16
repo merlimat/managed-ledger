@@ -413,12 +413,8 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         }
 
         cursor.markDelete(new PositionImpl(lastPosition.getLedgerId(), lastPosition.getEntryId() - 1));
-        try {
-            cursor.seek(new PositionImpl(lastPosition.getLedgerId(), lastPosition.getEntryId() - 1));
-            fail("Should have failed");
-        } catch (IllegalArgumentException e) {
-            // Ok
-        }
+        cursor.seek(new PositionImpl(lastPosition.getLedgerId(), lastPosition.getEntryId() - 1));
+        assertEquals(cursor.getReadPosition(), lastPosition);
     }
 
     @Test(timeOut = 20000)
@@ -427,22 +423,21 @@ public class ManagedCursorTest extends MockedBookKeeperTestCase {
         ManagedLedger ledger = factory.open("my_test_ledger");
         ManagedCursor cursor = ledger.openCursor("c1");
         Position p1 = ledger.addEntry("dummy-entry-1".getBytes(Encoding));
-        ledger.addEntry("dummy-entry-2".getBytes(Encoding));
+        Position p2 = ledger.addEntry("dummy-entry-2".getBytes(Encoding));
         ledger.addEntry("dummy-entry-3".getBytes(Encoding));
         ledger.addEntry("dummy-entry-4".getBytes(Encoding));
         ledger.addEntry("dummy-entry-5".getBytes(Encoding));
         ledger.addEntry("dummy-entry-6".getBytes(Encoding));
 
         cursor.markDelete(p1);
-        cursor.readEntries(2);
         assertEquals(cursor.getMarkDeletedPosition(), p1);
+        assertEquals(cursor.getReadPosition(), p2);
 
-        try {
-            cursor.seek(cursor.getMarkDeletedPosition());
-            fail("should have failed");
-        } catch (IllegalArgumentException e) {
-            // Ok
-        }
+        cursor.readEntries(2);
+
+        cursor.seek(p2);
+        assertEquals(cursor.getMarkDeletedPosition(), p1);
+        assertEquals(cursor.getReadPosition(), p2);
     }
 
     @Test(timeOut = 20000)

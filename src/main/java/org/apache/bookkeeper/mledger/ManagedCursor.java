@@ -169,8 +169,8 @@ public interface ManagedCursor {
     /**
      * Move the cursor to a different read position.
      * 
-     * The new position cannot be before the already mark deleted position and cannot be past the last written entry in
-     * the ManagedLedger.
+     * If the new position happens to be before the already mark deleted position, it will be set to the mark deleted
+     * position instead.
      * 
      * @param newReadPosition
      *            the position where to move the cursor
